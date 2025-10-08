@@ -64,6 +64,9 @@ DISPLAY_ROTATION_SPEED           = 5.0
 SHOW_LEGEND                      = False
 OFFSET_LEGEND_BY                 = 0
 
+# Replace missing fltCat with nearest valid station's fltCat
+REPLACE_CAT_WITH_CLOSEST         = True
+
 # ---------------------------------------------------------------------------
 # ------------END OF CONFIGURATION-------------------------------------------
 # ---------------------------------------------------------------------------
@@ -250,7 +253,7 @@ print(f"Parsed {station_count} stations.")
 valid_stations = [s for s in station_meta if s["fltCat"] and s["lat"] and s["lon"]]
 
 for s in station_meta:
-    if not s["fltCat"] and s["lat"] and s["lon"] and valid_stations:
+    if not s["fltCat"] and s["lat"] and s["lon"] and valid_stations and REPLACE_CAT_WITH_CLOSEST:
         nearest = None
         nearest_dist = float("inf")
         for ref in valid_stations:
