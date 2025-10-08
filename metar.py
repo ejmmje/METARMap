@@ -176,9 +176,16 @@ station_meta = []
 for location in output:
     icaoId = safe_str(location.get("icaoId"))
     receiptTime = safe_str(location.get("receiptTime"))
-    obsTime = safe_str(location.get("obsTime", "0"))
-    reportTimeE = safe_str(location.get("reportTime"))
+    # 1. Pulls Obs time
+    obsTime = safe_str(location.get("obsTime"))
+    # 2. Converts to datetime for display
+    try:
+        obsTime = datetime.datetime.fromtimestamp(int(obsTime))
+    except ValueError:
+        # Default to epoch if invalid 00:00Z
+        obsTime = datetime.datetime(1970, 1, 1)
 
+    reportTimeE = safe_str(location.get("reportTime"))
     temp = safe_round(location.get("temp", 0.0))
     dewp = safe_round(location.get("dewp", 0.0))
     wdir = safe_str(location.get("wdir"))
@@ -269,9 +276,9 @@ for s in station_meta:
 # Start up external display output
 disp = None
 if displaymetar is not None and ACTIVATE_EXTERNAL_METAR_DISPLAY:
-	print("setting up external display")
-	disp = displaymetar.startDisplay()
-	displaymetar.clearScreen(disp)
+    print("setting up external display")
+    disp = displaymetar.startDisplay()
+    displaymetar.clearScreen(disp)
 
 
 # Setting LED colors based on weather conditions
