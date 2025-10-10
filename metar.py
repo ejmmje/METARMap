@@ -217,11 +217,7 @@ for location in output:
     elev = safe_int(location.get("elev", 0))
     name = safe_str(location.get("name"))
     clouds = location.get("clouds") or []
-    # Base cloud conditions
-    if clouds:
-        cloudBaseFt = int(clouds[0]["base"])
-    else:
-        cloudBaseFt = 0
+
 
     fltCat = safe_str(location.get("fltCat"))
 
@@ -248,7 +244,6 @@ for location in output:
             "dewpointC": dewp,
             "altimHg": altim,
             "skyConditions": clouds,
-            "cloudBaseFt": cloudBaseFt,
             "lightning": lightning,
         }
         station_list.append(icaoId)
