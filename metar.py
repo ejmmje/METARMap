@@ -58,7 +58,7 @@ LED_BRIGHTNESS_DIM               = 0.1
 USE_SUNRISE_SUNSET               = True
 LOCATION                         = "Detroit"
 
-ACTIVATE_EXTERNAL_METAR_DISPLAY  = False
+ACTIVATE_EXTERNAL_METAR_DISPLAY  = True
 DISPLAY_ROTATION_SPEED           = 5.0
 
 SHOW_LEGEND                      = False
@@ -217,13 +217,12 @@ for location in output:
     elev = safe_int(location.get("elev", 0))
     name = safe_str(location.get("name"))
     clouds = location.get("clouds") or []
-    skyConditions = []
-    for skyIter in clouds:
-        skyCond = {
-            "cover": safe_str(skyIter.get("sky_cover")),
-            "cloudBaseFt": safe_int(skyIter.get("cloud_base_ft_agl", 0))
-        }
-        skyConditions.append(skyCond)
+    # Base cloud conditions
+    if clouds:
+        cloudBaseFt = int(clouds[0]["base"])
+    else:
+        cloudBaseFt = 0
+
     fltCat = safe_str(location.get("fltCat"))
 
     # --- Lightning detection ---
@@ -249,7 +248,7 @@ for location in output:
             "dewpointC": dewp,
             "altimHg": altim,
             "skyConditions": clouds,
-            "skyConditions": skyConditions,
+            "cloudBaseFt": cloudBaseFt,
             "lightning": lightning,
         }
         station_list.append(icaoId)
@@ -346,14 +345,14 @@ while looplimit > 0:
     pixels.show()
 
     # Rotate through airports METAR on external display
-if disp is not None:
-    if displayTime <= DISPLAY_ROTATION_SPEED:
-        displaymetar.outputMetar(disp, station_list[displayAirportCounter], conditionDict.get(station_list[displayAirportCounter], None))
-        displayTime += BLINK_SPEED
-    else:
-        displayTime = 0.0
-        displayAirportCounter = displayAirportCounter + 1 if displayAirportCounter < numAirports-1 else 0
-        print("showing METAR Display for " + station_list[displayAirportCounter])
+    if disp is not None:
+        if displayTime <= DISPLAY_ROTATION_SPEED:
+            displaymetar.outputMetar(disp, station_list[displayAirportCounter], conditionDict.get(station_list[displayAirportCounter], None))
+            displayTime += BLINK_SPEED
+        else:
+            displayTime = 0.0
+            displayAirportCounter = displayAirportCounter + 1 if displayAirportCounter < numAirports-1 else 0
+            print("showing METAR Display for " + station_list[displayAirportCounter])
 
     # Switching between animation cycles
     time.sleep(BLINK_SPEED)
