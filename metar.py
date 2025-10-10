@@ -217,6 +217,13 @@ for location in output:
     elev = safe_int(location.get("elev", 0))
     name = safe_str(location.get("name"))
     clouds = location.get("clouds") or []
+    skyConditions = []
+    for skyIter in clouds:
+        skyCond = {
+            "cover": safe_str(skyIter.get("sky_cover")),
+            "cloudBaseFt": safe_int(skyIter.get("cloud_base_ft_agl", 0))
+        }
+        skyConditions.append(skyCond)
     fltCat = safe_str(location.get("fltCat"))
 
     # --- Lightning detection ---
@@ -242,6 +249,7 @@ for location in output:
             "dewpointC": dewp,
             "altimHg": altim,
             "skyConditions": clouds,
+            "skyConditions": skyConditions,
             "lightning": lightning,
         }
         station_list.append(icaoId)
@@ -289,68 +297,68 @@ displayTime = 0.0
 displayAirportCounter = 0
 numAirports = station_count
 while looplimit > 0:
-	i = 0
-	for airportcode in airports:
-		# Skip NULL entries
-		if airportcode == "NULL":
-			i += 1
-			continue
+    i = 0
+    for airportcode in airports:
+        # Skip NULL entries
+        if airportcode == "NULL":
+            i += 1
+            continue
 
-		color = COLOR_CLEAR
-		conditions = conditionDict.get(airportcode, None)
-		windy = False
-		highWinds = False
-		lightningConditions = False
+        color = COLOR_CLEAR
+        conditions = conditionDict.get(airportcode, None)
+        windy = False
+        highWinds = False
+        lightningConditions = False
 
-		if conditions != None:
-			windy = True if (ACTIVATE_WINDCONDITION_ANIMATION and windCycle == True and (conditions["windSpeed"] >= WIND_BLINK_THRESHOLD or conditions["windGust"] == True)) else False
-			highWinds = True if (windy and HIGH_WINDS_THRESHOLD != -1 and (conditions["windSpeed"] >= HIGH_WINDS_THRESHOLD or conditions["windGustSpeed"] >= HIGH_WINDS_THRESHOLD)) else False
-			lightningConditions = True if (ACTIVATE_LIGHTNING_ANIMATION and windCycle == False and conditions["lightning"] == True) else False
-			if conditions["flightCategory"] == "VFR":
-				color = COLOR_VFR if not (windy or lightningConditions) else COLOR_LIGHTNING if lightningConditions else COLOR_HIGH_WINDS if highWinds else (COLOR_VFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR) if windy else COLOR_CLEAR
-			elif conditions["flightCategory"] == "MVFR":
-				color = COLOR_MVFR if not (windy or lightningConditions) else COLOR_LIGHTNING if lightningConditions else COLOR_HIGH_WINDS if highWinds else (COLOR_MVFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR) if windy else COLOR_CLEAR
-			elif conditions["flightCategory"] == "IFR":
-				color = COLOR_IFR if not (windy or lightningConditions) else COLOR_LIGHTNING if lightningConditions else COLOR_HIGH_WINDS if highWinds else (COLOR_IFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR) if windy else COLOR_CLEAR
-			elif conditions["flightCategory"] == "LIFR":
-				color = COLOR_LIFR if not (windy or lightningConditions) else COLOR_LIGHTNING if lightningConditions else COLOR_HIGH_WINDS if highWinds else (COLOR_LIFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR) if windy else COLOR_CLEAR
-			else:
-				color = COLOR_CLEAR
-		
-		print("Setting LED " + str(i) + " for " + airportcode + " to " + ("lightning " if lightningConditions else "") + ("very " if highWinds else "") + ("windy " if windy else "") + (conditions["flightCategory"] if conditions != None else "None") + " " + str(color))
-		pixels[i] = color
-		i += 1
+        if conditions != None:
+            windy = True if (ACTIVATE_WINDCONDITION_ANIMATION and windCycle == True and (conditions["windSpeed"] >= WIND_BLINK_THRESHOLD or conditions["windGust"] == True)) else False
+            highWinds = True if (windy and HIGH_WINDS_THRESHOLD != -1 and (conditions["windSpeed"] >= HIGH_WINDS_THRESHOLD or conditions["windGustSpeed"] >= HIGH_WINDS_THRESHOLD)) else False
+            lightningConditions = True if (ACTIVATE_LIGHTNING_ANIMATION and windCycle == False and conditions["lightning"] == True) else False
+            if conditions["flightCategory"] == "VFR":
+                color = COLOR_VFR if not (windy or lightningConditions) else COLOR_LIGHTNING if lightningConditions else COLOR_HIGH_WINDS if highWinds else (COLOR_VFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR) if windy else COLOR_CLEAR
+            elif conditions["flightCategory"] == "MVFR":
+                color = COLOR_MVFR if not (windy or lightningConditions) else COLOR_LIGHTNING if lightningConditions else COLOR_HIGH_WINDS if highWinds else (COLOR_MVFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR) if windy else COLOR_CLEAR
+            elif conditions["flightCategory"] == "IFR":
+                color = COLOR_IFR if not (windy or lightningConditions) else COLOR_LIGHTNING if lightningConditions else COLOR_HIGH_WINDS if highWinds else (COLOR_IFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR) if windy else COLOR_CLEAR
+            elif conditions["flightCategory"] == "LIFR":
+                color = COLOR_LIFR if not (windy or lightningConditions) else COLOR_LIGHTNING if lightningConditions else COLOR_HIGH_WINDS if highWinds else (COLOR_LIFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR) if windy else COLOR_CLEAR
+            else:
+                color = COLOR_CLEAR
 
-	# Legend
-	if SHOW_LEGEND:
-		pixels[i + OFFSET_LEGEND_BY] = COLOR_VFR
-		pixels[i + OFFSET_LEGEND_BY + 1] = COLOR_MVFR
-		pixels[i + OFFSET_LEGEND_BY + 2] = COLOR_IFR
-		pixels[i + OFFSET_LEGEND_BY + 3] = COLOR_LIFR
-		if ACTIVATE_LIGHTNING_ANIMATION == True:
-			pixels[i + OFFSET_LEGEND_BY + 4] = COLOR_LIGHTNING if windCycle else COLOR_VFR # lightning
-		if ACTIVATE_WINDCONDITION_ANIMATION == True:
-			pixels[i+ OFFSET_LEGEND_BY + 5] = COLOR_VFR if not windCycle else (COLOR_VFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR)    # windy
-			if HIGH_WINDS_THRESHOLD != -1:
-				pixels[i + OFFSET_LEGEND_BY + 6] = COLOR_VFR if not windCycle else COLOR_HIGH_WINDS  # high winds
+        print("Setting LED " + str(i) + " for " + airportcode + " to " + ("lightning " if lightningConditions else "") + ("very " if highWinds else "") + ("windy " if windy else "") + (conditions["flightCategory"] if conditions != None else "None") + " " + str(color))
+        pixels[i] = color
+        i += 1
 
-	# Update actual LEDs all at once
-	pixels.show()
-	
-	# Rotate through airports METAR on external display
-	if disp is not None:
-		if displayTime <= DISPLAY_ROTATION_SPEED:
-			displaymetar.outputMetar(disp, station_list[displayAirportCounter], conditionDict.get(station_list[displayAirportCounter], None))
-			displayTime += BLINK_SPEED
-		else:
-			displayTime = 0.0
-			displayAirportCounter = displayAirportCounter + 1 if displayAirportCounter < numAirports-1 else 0
-			print("showing METAR Display for " + station_list[displayAirportCounter])
+    # Legend
+    if SHOW_LEGEND:
+        pixels[i + OFFSET_LEGEND_BY] = COLOR_VFR
+        pixels[i + OFFSET_LEGEND_BY + 1] = COLOR_MVFR
+        pixels[i + OFFSET_LEGEND_BY + 2] = COLOR_IFR
+        pixels[i + OFFSET_LEGEND_BY + 3] = COLOR_LIFR
+        if ACTIVATE_LIGHTNING_ANIMATION == True:
+            pixels[i + OFFSET_LEGEND_BY + 4] = COLOR_LIGHTNING if windCycle else COLOR_VFR # lightning
+        if ACTIVATE_WINDCONDITION_ANIMATION == True:
+            pixels[i+ OFFSET_LEGEND_BY + 5] = COLOR_VFR if not windCycle else (COLOR_VFR_FADE if FADE_INSTEAD_OF_BLINK else COLOR_CLEAR)    # windy
+            if HIGH_WINDS_THRESHOLD != -1:
+                pixels[i + OFFSET_LEGEND_BY + 6] = COLOR_VFR if not windCycle else COLOR_HIGH_WINDS  # high winds
 
-	# Switching between animation cycles
-	time.sleep(BLINK_SPEED)
-	windCycle = False if windCycle else True
-	looplimit -= 1
+    # Update actual LEDs all at once
+    pixels.show()
+
+    # Rotate through airports METAR on external display
+if disp is not None:
+    if displayTime <= DISPLAY_ROTATION_SPEED:
+        displaymetar.outputMetar(disp, station_list[displayAirportCounter], conditionDict.get(station_list[displayAirportCounter], None))
+        displayTime += BLINK_SPEED
+    else:
+        displayTime = 0.0
+        displayAirportCounter = displayAirportCounter + 1 if displayAirportCounter < numAirports-1 else 0
+        print("showing METAR Display for " + station_list[displayAirportCounter])
+
+    # Switching between animation cycles
+    time.sleep(BLINK_SPEED)
+    windCycle = False if windCycle else True
+    looplimit -= 1
 
 print()
 print("Done")
