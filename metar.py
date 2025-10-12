@@ -48,7 +48,7 @@ FADE_INSTEAD_OF_BLINK            = True
 WIND_BLINK_THRESHOLD             = 15
 HIGH_WINDS_THRESHOLD             = 25
 ALWAYS_BLINK_FOR_GUSTS           = False
-BLINK_SPEED                      = 1.0
+BLINK_SPEED                      = 5.0
 BLINK_TOTALTIME_SECONDS          = 300
 
 ACTIVATE_DAYTIME_DIMMING         = True
@@ -113,7 +113,7 @@ with open("PATH/TO/airports") as f:
     airports = f.readlines()
 airports = [x.strip() for x in airports]
 try:
-    with open("PATH/TO/displaymetar.py") as f2:
+    with open("PATH/TO/displayairports") as f2:
         displayairports = f2.readlines()
     displayairports = [x.strip() for x in displayairports]
     print("Using subset airports for LED display")
@@ -289,7 +289,8 @@ looplimit = int(round(BLINK_TOTALTIME_SECONDS / BLINK_SPEED)) if (ACTIVATE_WINDC
 windCycle = False
 displayTime = 0.0
 displayAirportCounter = 0
-numAirports = station_count
+display_list = displayairports if displayairports else station_list
+numAirports = len(display_list)
 while looplimit > 0:
     i = 0
     for airportcode in airports:
@@ -342,12 +343,16 @@ while looplimit > 0:
     # Rotate through airports METAR on external display
     if disp is not None:
         if displayTime <= DISPLAY_ROTATION_SPEED:
-            displaymetar.outputMetar(disp, station_list[displayAirportCounter], conditionDict.get(station_list[displayAirportCounter], None))
-            displayTime += BLINK_SPEED
+            airport_to_display = display_list[displayAirportCounter]
+            displaymetar.outputMetar(
+                disp,
+                airport_to_display,
+                conditionDict.get(airport_to_display, None)
+            )
         else:
             displayTime = 0.0
-            displayAirportCounter = displayAirportCounter + 1 if displayAirportCounter < numAirports-1 else 0
-            print("showing METAR Display for " + station_list[displayAirportCounter])
+            displayAirportCounter = (displayAirportCounter + 1) % numAirports
+            print("showing METAR Display for " + display_list[displayAirportCounter])
 
     # Switching between animation cycles
     time.sleep(BLINK_SPEED)
