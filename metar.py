@@ -273,7 +273,6 @@ for location in output:
             "skyConditions": clouds,
             "lightning": lightning,
         }
-        station_list.append(icaoId)
 
         # --- store for lookup ---
         station_meta.append({
