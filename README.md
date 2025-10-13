@@ -37,7 +37,7 @@ A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs
    cd METARMap
    ```
 
-2. Run the setup script:
+2. Run the setup script next. The only part of the setup that is not necessarily automatic is the crontab setup. The script looks to see if anything already exists so that it doesn't overwrite anything. So, clear out the sudo crontab if you want or edit it yourself manually afterwords:
    ```
    sudo bash setup.sh
    ```
