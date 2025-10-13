@@ -1,129 +1,167 @@
 # METARMap
 
-Raspberry Pi project to visualize flight conditions on a map using WS8211 LEDs addressed via NeoPixel
+A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs. The LEDs change colors based on METAR weather data from aviationweather.gov.
 
-## Detailed instructions
+## Features
 
-I've created detailed instructions about the setup and parts used here: https://slingtsi.rueker.com/making-a-led-powered-metar-map-for-your-wall/
+- Real-time weather visualization with color-coded LEDs
+- Support for wind and lightning animations
+- Optional daytime dimming based on sunrise/sunset
+- Optional external mini OLED display for METAR details
+- Automated scheduling via crontab
 
-## Software Setup
+## Prerequisites
 
-* Install [Raspberry Pi OS Lite](https://www.raspberrypi.org/software/) on SD card
-* [Enable Wi-Fi and SSH](https://medium.com/@danidudas/install-raspbian-jessie-lite-and-setup-wi-fi-without-access-to-command-line-or-using-the-network-97f065af722e)
-* Install SD card and power up Raspberry Pi
-* SSH (using [Putty](https://www.putty.org) or some other SSH tool) into the Raspberry and configure password and timezones
-  * `passwd`
-  * `sudo raspi-config`
-* Update packages 
-  * `sudo apt-get update`
-  * `sudo apt-get upgrade`
-* Copy the **[metar.py](metar.py)**, **[pixelsoff.py](pixelsoff.py)**, **[airports](airports)**, **[refresh.sh](refresh.sh)** and **[lightsoff.sh](lightsoff.sh)** scripts into the pi home directory (/home/pi)
-* Install python3 and pip3 if not already installed
-  * `sudo apt-get install python3`
-  * `sudo apt-get install python3-pip`
-* Install required python libraries for the project
-  * [Neopixel](https://learn.adafruit.com/neopixels-on-raspberry-pi/python-usage): `sudo pip3 install rpi_ws281x adafruit-circuitpython-neopixel`
-* Attach WS8211 LEDs to Raspberry Pi, if you are using just a few, you can connect the directly, otherwise you may need to also attach external power to the LEDs. For my purpose with 22 powered LEDs it was fine to just connect it directly. You can find [more details about wiring here](https://learn.adafruit.com/neopixels-on-raspberry-pi/raspberry-pi-wiring).
-* Test the script by running it directly (it needs to run with root permissions to access the GPIO pins):
-  * `sudo python3 metar.py`
-* Make appropriate changes to the **[airports](airports)** file for the airports you want to use and change the **[metar.py](metar.py)** and **[pixelsoff.py](pixelsoff.py)** script to the correct **`LED_COUNT`** (including NULLs if you have LEDS in between airports that will stay off) and **`LED_BRIGHTNESS`** if you want to change it
-* To run the script automatically when you power the Raspberry Pi, you will need to grant permissions to execute the **[refresh.sh](refresh.sh)** and **[lightsoff.sh](lightsoff.sh)** script and read permissions to the **[airports](airports)**, **[metar.py](metar.py)** and **[pixelsoff.py](pixelsoff.py)** script using chmod:
-  * `chmod +x filename` will grant execute permissions
-  * `chmod +r filename` will grant write permissions
-* To have the script start up automatically and refresh in regular intervals, use crontab and set the appropriate interval. For an example you can refer to the [crontab](crontab) file in the GitHub repo (make sure you grant the file execute permissions beforehand to the refresh.sh and lightsoff.sh file). To edit your crontab type: **`crontab -e`**, after you are done with the edits, exit out by pressing **ctrl+x** and confirm the write operation
-  * The sample crontab will run the script every 5 minutes (the */5) between the hours of 7 to 21, which includes the 21 hour, so it means it will run until 21:55
-  * Then at 22:05 it will run the lightsoff.sh script, which will turn all the lights off
+- Raspberry Pi (any model with GPIO)
+- WS2811 LED strip (or compatible)
+- Optional: Mini OLED display (SSD1306) for METAR details
+- Internet connection for fetching weather data
+- Basic knowledge of connecting LEDs to Raspberry Pi GPIO
 
-## Additional Wind condition blinking/fading functionality
+## Hardware Setup
 
-I recently expanded the script to also take wind condition into account and if the wind exceeds a certain threshold, or if it is gusting, make the LED for that airport either blink on/off or to fade between  two shades of the current flight category color.
+1. Connect the WS2811 LED strip to your Raspberry Pi:
+   - Data pin to GPIO 18 (physical pin 12)
+   - Power and ground as appropriate
+   - For more details, see the [Adafruit NeoPixel guide](https://learn.adafruit.com/neopixels-on-raspberry-pi)
 
-If you want to use this extra functionality, then inside the **[metar.py](metar.py)** file set the **`ACTIVATE_WINDCONDITION_ANIMATION`** parameter to **True**.
+2. If using the optional display:
+   - Connect the SSD1306 OLED display via I2C
+   - Enable I2C in raspi-config
 
-* There are a few additional parameters in the script you can configure to your liking:
-  * `FADE_INSTEAD_OF_BLINK` - set this to either **True** or **False** to switch between fading or blinking for the LEDs when conditions are windy
-  * `WIND_BLINK_THRESHOLD` - in Knots for normal wind speeds currently at the airport
-  * `ALWAYS_BLINK_FOR_GUSTS` - If you always want the blinking/fading to happen for gusts, regardless of the wind speed
-  * `BLINKS_SPEED` - How fast the blinking happens, I found 1 second to be a happy medium so it's not too busy, but you can also make it faster, for example every half a second by using 0.5
-  * `BLINK_TOTALTIME_SECONDS` = How long do you want the script to run. I have this set to 300 seconds as I have my crontab setup to re-run the script every 5 minutes to get the latest weather information
-  * `HIGH_WINDS_THRESHOLD` - If you want LEDs to flash to Yellow for particularly high winds beyond the normal `WIND_BLINK_THRESHOLD` then set this variable in knots. If you only want normal blinking/fading based on `WIND_BLINK_THRESHOLD` then set the value for `HIGH_WINDS_THRESHOLD` to **`-1`**
+## Installation
 
-## Additional Lightning in the vicinity blinking functionality
+1. Download or clone this repository to your Raspberry Pi:
+   ```
+   git clone https://github.com/your-repo/METARMap.git
+   cd METARMap
+   ```
 
-After the recent addition for wind condition animation, I got another request from someone if I could add a white blinking animation to represent lightning in the area.
-Please note that due to the nature of the METAR system, this means that the METAR for this airport reports that there is Lightning somewhere in the vicinity of the airport, but not necessarily right at the airport.
+2. Run the setup script:
+   ```
+   sudo bash setup.sh
+   ```
+   This will install dependencies, set permissions, and configure crontab.
 
-If you want to use this extra functionality, then inside the **[metar.py](metar.py)** file set the **`ACTIVATE_LIGHTNING_ANIMATION`** parameter to **True**.
+3. Reboot if I2C was enabled for the display.
 
-* This shares two configuration parameters together with the wind animation that you can modify as you like:
-  * `BLINKS_SPEED` - How fast the blinking happens, I found 1 second to be a happy medium so it's not too busy, but you can also make it faster, for example every half a second by using 0.5
-  * `BLINK_TOTALTIME_SECONDS` = How long do you want the script to run. I have this set to 300 seconds as I have my crontab setup to re-run the script every 5 minutes to get the latest weather information
+## Configuration
 
-## Additional LED dimming functionality based on time of day
+To edit configuration files on your Raspberry Pi, use a text editor like `nano`. For example, to edit the airports file:
 
-This optional functionality allows you to run the LEDs at a dimmed lower level between a certain time of the day.
+```
+nano airports
+```
 
-If you want to use this extra functionality, then inside the **[metar.py](metar.py)** file set the **`ACTIVATE_DAYTIME_DIMMING`** parameter to **True**.
-Set the `LED_BRIGHTNESS_DIM` setting to the level you want to run when dimmed.
+Make your changes, then save and exit by pressing `Ctrl+X`, then `Y`, then `Enter`.
 
-For time timings of the dimming there are two options:
+### Airports
 
-* Fixed time of day dimming:
-  * `BRIGHT_TIME_START` - Set this to the beginning of the day when you want to run at the normal `LED_BRIGHTNESS` level
-  * `DIM_TIME_START` - Set this to the time where you want to run at a different `LED_BRIGHTNESS_DIM` level
-* Dimming based on local sunrise/sunset:
-  * For this to work, you need to install an additional library, run:
-    * `sudo pip3 install astral`
-  * `USE_SUNRISE_SUNSET` - Set this to **True** to use the dimming based on sunrise and sunset
-  * `LOCATION` - set this to the city you want to use for sunset/sunrise timings
-    * Use the closest city from the list of supported cities from https://astral.readthedocs.io/en/latest/#cities
+Edit the `airports` file to include the ICAO codes of the airports you want to monitor. Each airport on a new line. Use "NULL" for gaps in your LED strip.
 
-## Additional mini display to show METAR information functionality
+Example:
+```
+KDTW
+NULL
+KJFK
+KLAX
+```
 
-This optional functionality allows you to connect a small mini LED display to show the METAR information of the airports.
+### Display Airports (Optional)
 
-For this functionality to work, you will need to buy a compatible LED display and enable and install a few additional things.
+If using the external display, edit `displayairports` to specify which airports to show details for. If not present, all airports will rotate.
 
-I've written up some details on the display I used and the wiring here: https://slingtsi.rueker.com/adding-a-mini-display-to-show-metar-information-to-the-metar-map/
+### Settings
 
-To support the display you need to enable a few new libraries and settings on the raspberry pi.
+Edit `config.json` to customize the behavior of METARMap. Below is a detailed explanation of each configuration option:
 
-* [Enable I2C](https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c)
-* `sudo raspi-config`
-* Interface Options
-* I2C
-* reboot the Reboot the Raspberry Pi `sudo reboot`
-* Verify your wiring is working and I2C is enabled
-  * `sudo apt-get install i2c-tools`
-  * `sudo i2cdetect -y 1` - this should show something connected at **3C**
-* install python library for the display
-  * `sudo pip3 install adafruit-circuitpython-ssd1306`
-  * `sudo pip3 install pillow`
-* install additional libraries needed to fill the display
-  * `sudo apt-get install fonts-dejavu`
-  * `sudo apt-get install libjpeg-dev -y`
-  * `sudo apt-get install zlib1g-dev -y`
-  * `sudo apt-get install libfreetype6-dev -y`
-  * `sudo apt-get install liblcms1-dev -y`
-  * `sudo apt-get install libopenjp2-7 -y`
-  * `sudo apt-get install libtiff5 -y`
-* copy new file **[displaymetar.py](displaymetar.py)** into the same folder as **[metar.py](metar.py)**
-* Use the latest version of **[metar.py](metar.py)** and **[pixelsoff.py](pixelsoff.py)** for the new functionality
-* Configure **[metar.py](metar.py)** and set **`ACTIVATE_EXTERNAL_METAR_DISPLAY`** parameter to **True**.
-* Configure the `DISPLAY_ROTATION_SPEED` to your desired timing, I'm using 5 seconds for mine.
-* If you want to only show a subset of the airports on the display, create a new file in the folder called **displayairports** and add the airports that you want to be shown on the display to it
+#### LED Hardware Configuration
+- **`LED_COUNT`**: Number of LEDs in your WS2811 strip. Must match the physical number of LEDs. Example: `50`
+- **`LED_PIN`**: GPIO pin connected to the LED strip data line. For Raspberry Pi, use `"board.D18"` (GPIO 18). Example: `"board.D18"`
+- **`LED_BRIGHTNESS`**: Default brightness level for the LEDs. Range: 0.0 (off) to 1.0 (full brightness). Example: `0.5`
+- **`LED_ORDER`**: Color order of your LED strip. Usually `"neopixel.GRB"` for most WS2811 strips. Example: `"neopixel.GRB"`
 
-## Legend
+#### Color Definitions
+RGB color values (0-255) for different flight categories:
+- **`COLOR_VFR`**: Color for Visual Flight Rules (good weather). Default: `[255, 0, 0]` (Red)
+- **`COLOR_VFR_FADE`**: Faded color for VFR animations. Default: `[125, 0, 0]` (Dark Red)
+- **`COLOR_MVFR`**: Color for Marginal VFR (moderate weather). Default: `[0, 0, 255]` (Blue)
+- **`COLOR_MVFR_FADE`**: Faded color for MVFR animations. Default: `[0, 0, 125]` (Dark Blue)
+- **`COLOR_IFR`**: Color for Instrument Flight Rules (poor weather). Default: `[0, 255, 0]` (Green)
+- **`COLOR_IFR_FADE`**: Faded color for IFR animations. Default: `[0, 125, 0]` (Dark Green)
+- **`COLOR_LIFR`**: Color for Low IFR (very poor weather). Default: `[0, 125, 125]` (Cyan)
+- **`COLOR_LIFR_FADE`**: Faded color for LIFR animations. Default: `[0, 75, 75]` (Dark Cyan)
+- **`COLOR_CLEAR`**: Color for no data or off. Default: `[0, 0, 0]` (Black)
+- **`COLOR_LIGHTNING`**: Color for lightning conditions. Default: `[255, 255, 255]` (White)
+- **`COLOR_HIGH_WINDS`**: Color for high wind conditions. Default: `[255, 255, 0]` (Yellow)
 
-If you want an interactive Legend to illustrate the possible behaviors you can do so by adding an additional up to 7 LEDs after the last LED based on your number of LEDs of the airports in the **airports** file
+#### Animation Settings
+- **`ACTIVATE_WINDCONDITION_ANIMATION`**: Enable blinking/fading for windy conditions. Set to `true` or `false`. Default: `true`
+- **`ACTIVATE_LIGHTNING_ANIMATION`**: Enable flashing for lightning in vicinity. Set to `true` or `false`. Default: `true`
+- **`FADE_INSTEAD_OF_BLINK`**: Use fade effect instead of on/off blink. Set to `true` or `false`. Default: `true`
+- **`WIND_BLINK_THRESHOLD`**: Wind speed (knots) to trigger wind animation. Example: `15`
+- **`HIGH_WINDS_THRESHOLD`**: Wind speed for high winds (yellow color). Set to `-1` to disable. Example: `25`
+- **`ALWAYS_BLINK_FOR_GUSTS`**: Always animate for gusts regardless of speed. Set to `true` or `false`. Default: `false`
+- **`BLINK_SPEED`**: Speed of animation cycles in seconds. Example: `2.0`
+- **`BLINK_TOTALTIME_SECONDS`**: Total time the script runs in seconds. Example: `300` (5 minutes)
 
-* Set `SHOW_LEGEND` to **True** to use this feature
-* If you want to skip some LEDs after your last airport before the legend, you can set `OFFSET_LEGEND_BY` to the number of LEDs to skip
-* **Note**: The Lightning and Wind Condition LEDs will only show if you are actually using these features based on the `ACTIVATE_LIGHTNING_ANIMATION`, `ACTIVATE_WINDCONDITION_ANIMATION` and `HIGH_WINDS_THRESHOLD` variables.
-  * If you are not using any of these, then you only need 4 LEDs for the basic flight conditions for the Legend
-  * If you are only using the Wind condition feature, but not the Lightning, you will still need the total of 7 LEDs (but the 5th LED for Lightning will just stay blank) or you'd have to change the order in the code
+#### Daytime Dimming Settings
+- **`ACTIVATE_DAYTIME_DIMMING`**: Enable brightness dimming during the day. Set to `true` or `false`. Default: `true`
+- **`BRIGHT_TIME_START`**: Time to start full brightness (HH:MM). Example: `"07:00"`
+- **`DIM_TIME_START`**: Time to start dimming (HH:MM). Example: `"19:00"`
+- **`LED_BRIGHTNESS_DIM`**: Dimmed brightness level (0.0 to 1.0). Example: `0.1`
+- **`USE_SUNRISE_SUNSET`**: Use actual sunrise/sunset times instead of fixed times. Set to `true` or `false`. Default: `true`
+- **`LOCATION`**: City name for sunrise/sunset calculations (if enabled). Example: `"Detroit"`
 
+#### External Display Settings
+- **`ACTIVATE_EXTERNAL_METAR_DISPLAY`**: Enable the OLED display for METAR details. Set to `true` or `false`. Default: `true`
+- **`DISPLAY_ROTATION_SPEED`**: Seconds between display updates. Example: `5.0`
 
-## Changelist
+#### Legend Display Settings
+- **`SHOW_LEGEND`**: Show a color legend on extra LEDs. Set to `true` or `false`. Default: `false`
+- **`OFFSET_LEGEND_BY`**: Position offset for the legend. Example: `0`
 
-To see a list of changes to the metar script over time, refer to [CHANGELIST.md](CHANGELIST.md)
+#### Data Processing Settings
+- **`REPLACE_CAT_WITH_CLOSEST`**: Fill missing flight categories with the nearest station's data. Set to `true` or `false`. Default: `true`
+
+## Testing
+
+To test the setup:
+```
+sudo python3 metar.py
+```
+
+The LEDs should light up according to current weather conditions.
+
+## Running Automatically
+
+The setup script configures crontab to run the map every 5 minutes between 7 AM and 10 PM, and turn off lights at 10:05 PM.
+
+To view or modify the schedule:
+```
+crontab -e
+```
+
+## Flight Categories
+
+- **VFR (Visual Flight Rules)**: Green - Good weather
+- **MVFR (Marginal VFR)**: Blue - Moderate weather
+- **IFR (Instrument Flight Rules)**: Red - Poor weather
+- **LIFR (Low IFR)**: Magenta - Very poor weather
+
+## Animations
+
+- **Wind**: LEDs fade/blink for windy conditions
+- **Lightning**: White flashes for thunderstorms
+- **High Winds**: Yellow for very high winds
+
+## Troubleshooting
+
+- Ensure the Raspberry Pi has internet access
+- Check LED connections and power supply
+- Verify airport codes are correct ICAO codes
+- For display issues, ensure I2C is enabled and wiring is correct
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

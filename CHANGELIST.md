@@ -1,4 +1,6 @@
-# Changelist
+# METARMap Changelist
+# This file documents the version history and changes made to the METARMap project.
+# Each version includes the date and a description of the changes or fixes.
 
 ## 1.6.3 (2024-04-15)
 
