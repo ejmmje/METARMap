@@ -31,24 +31,30 @@ A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs
 
 ## Installation
 
-1. Download or clone this repository to your Raspberry Pi:
+1. Log into your Raspberry Pi via SSH or terminal.
+
+2. Download or clone this repository to your Raspberry Pi. If needed install git first:
+   ```
+   git --version || sudo apt install git -y
+   ```
+   Then clone the repo:
    ```
    git clone --branch docker_support https://github.com/ejmmje/METARMap.git
    cd METARMap
    ```
 
-2. Run the setup script next. The only part of the setup that is not necessarily automatic is the crontab setup. The script looks to see if anything already exists so that it doesn't overwrite anything. So, clear out the sudo crontab if you want or edit it yourself manually afterwords:
+3. Run the setup script next. The only part of the setup that is not necessarily automatic is the crontab setup. The script looks to see if anything already exists so that it doesn't overwrite anything. So, clear out the sudo crontab if you want or edit it yourself manually afterwords:
    ```
    sudo bash setup.sh
    ```
    This will install dependencies, set permissions, and configure crontab.
 
-3. If using an external display, you may need to reboot after I2C was enabled for the display.
+4. If using an external display, you may need to reboot after I2C was enabled for the display.
     ```
     sudo reboot
     ```
    
-4. This is it! The map should now run on the next 5 minute mark between 7:00am and 9:59pm based on the example airports listed in the airports file. To edit them, see the Configuration section below.
+5. This is it! The map should now run on the next 5 minute mark between 7:00am and 9:59pm based on the example airports listed in the airports file. To edit them, see the Configuration section below.
 
 ## Configuration
 
@@ -99,6 +105,29 @@ Edit the `config.json` file to customize settings such as colors, animation spee
 ```
 nano config.json
 ```
+
+## Final Considerations
+Make sure that you disable any cron jobs from the previous version of METARMap if you had it installed before. You can do this by running:
+```
+sudo crontab -e
+```
+
+The only cron jobs that should be there are the ones added by the setup script. If you see any others, delete them.
+They follow this general format:
+```
+# METARMap Crontab Configuration
+# This crontab runs the METARMap every 5 minutes from 7 AM to 9 PM,
+# and turns off the lights at 10 PM.
+# Project directory: /This/is/Different/for/Everyone/METARMap
+# For custom schedules, visit https://crontab.guru/
+
+# Run METARMap every 5 minutes from 7:00 AM to 9:00 PM
+*/5 7-21 * * * /This/is/Different/for/Everyone/refresh.sh
+
+# Turn off lights at 8:00 PM
+5 22 * * * /This/is/Different/for/Everyone/lightsoff.sh
+```
+
 
 ## Settings List for Reference or Custom Configuration
 

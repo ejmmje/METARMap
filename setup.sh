@@ -311,3 +311,56 @@ echo "Edit airports file to add your airports."
 echo "If using display, edit displayairports if needed."
 echo "To test, run: sudo $PROJECT_DIR/metarmap_env/bin/python3 $PROJECT_DIR/metar.py"
 echo "The system will run automatically via crontab."
+
+# Optional test run
+echo ""
+echo "Would you like to run a quick test of the LED colors and display?"
+echo "The test will light up the first 7 LEDs with colors for VFR (red), MVFR (blue), IFR (green), LIFR (cyan), lightning (white), high winds (yellow), and clear (off)."
+echo "If external display is enabled, it will show a sample METAR entry."
+read -p "Run test? (y/n): " run_test
+if [ "$run_test" = "y" ]; then
+    echo -e "${GREEN}Running LED and display test...${NC}"
+    . metarmap_env/bin/activate
+    python3 -c "
+import board
+import neopixel
+import time
+import json
+try:
+    with open('config.json') as f:
+        config = json.load(f)
+    LED_COUNT = config['LED_COUNT']
+    LED_PIN = eval(config['LED_PIN'])
+    LED_BRIGHTNESS = config['LED_BRIGHTNESS']
+    LED_ORDER = eval(config['LED_ORDER'])
+    ACTIVATE_EXTERNAL_METAR_DISPLAY = config['ACTIVATE_EXTERNAL_METAR_DISPLAY']
+    pixels = neopixel.NeoPixel(LED_PIN, LED_COUNT, brightness=LED_BRIGHTNESS, pixel_order=LED_ORDER, auto_write=False)
+    # Test colors: VFR, MVFR, IFR, LIFR, lightning, high winds, clear
+    colors = [(255,0,0), (0,0,255), (0,255,0), (0,125,125), (255,255,255), (255,255,0), (0,0,0)]
+    for i, color in enumerate(colors):
+        if i < LED_COUNT:
+            pixels[i] = color
+            print(f'testing LED {i} with color {color}')
+        else:
+            break
+    pixels.show()
+    time.sleep(5)
+    if ACTIVATE_EXTERNAL_METAR_DISPLAY:
+        try:
+            import displaymetar
+            disp = displaymetar.startDisplay()
+            displaymetar.clearScreen(disp)
+            displaymetar.outputMetar(disp, 'TEST', {'flightCategory': 'VFR', 'tempC': 20, 'windSpeed': 10})
+            print('Testing external display with sample METAR')
+            time.sleep(5)
+            displaymetar.clearScreen(disp)
+        except Exception as e:
+            print(f'Display test failed: {e}')
+    pixels.fill((0,0,0))
+    pixels.show()
+    print('Test complete')
+except Exception as e:
+    print(f'Test failed: {e}')
+"
+    deactivate
+fi
