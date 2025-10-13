@@ -48,27 +48,25 @@ A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs
     sudo reboot
     ```
    
-4. This is it! The map should now run based on the example airports listed in the airports file. To edit them, see the Configuration section below.
+4. This is it! The map should now run on the next 5 minute mark between 7:00am and 9:59pm based on the example airports listed in the airports file. To edit them, see the Configuration section below.
 
 ## Configuration
 
-- To change configuration, edit the config json manually or run the setup script again:
-  ```
-  nano config.json
-  ```
 
-### - Changing airports display!!
+### Airports
 
-You need to do this *manually* by editing the `airports` file. If you have an external display and wish to only display a subset, you need to edit the `displayairports` file.
+### Changing airports display
+
+You need to do this *manually* by editing the `airports` file. If you have an external display and wish to only display a subset, you need to ALSO edit the `displayairports` file.
 For example, to edit the airports file:
 
 ```
 nano airports
 ```
+I recommend typing out your airport codes in a text editor on your computer, then copying and pasting into the terminal window.
 
-Make your changes, then save and exit by pressing `Ctrl+X`, then `Y`, then `Enter`.
+To cut out the existing contents inside aiports, first ```nano``` then hold `Ctrl+K` to cut all lines, then paste your new list.
 
-### Airports
 
 Edit the `airports` file to include the ICAO codes of the airports you want to monitor. Each airport on a new line. Use "NULL" for gaps in your LED strip.
 
@@ -80,9 +78,27 @@ KJFK
 KLAX
 ```
 
+Make your changes, then save and exit by pressing `Ctrl+X`, then `Y`, then `Enter`.
+
+**FULL CODE EXAMPLE:**
+```
+nano airports
+```
+- Ctrl+K to cut all lines
+- Copy your new list from your text editor
+- Shift + Insert to paste in your new list or Ctrl+V
+- Ctrl+X, then Y, then Enter to save and exit
+
 ### Display Airports (Optional)
 
 If using the external display, edit `displayairports` to specify which airports to show details for. If not present, all airports will rotate.
+
+### To Change any other settings not set by the setup script
+Edit the `config.json` file to customize settings such as colors, animation speeds, and more.
+
+```
+nano config.json
+```
 
 ## Settings List for Reference or Custom Configuration
 
