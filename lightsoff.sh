@@ -1,14 +1,28 @@
 #!/bin/bash
-
 # METARMap Lights Off Script
-# This script kills any existing METARMap processes and runs the LED shutdown script.
-# It is used by cron to turn off the LEDs at night or when shutting down.
+# Kills any existing METARMap processes and runs the LED shutdown script.
+# Intended for use by cron to turn off LEDs at night or on shutdown.
 
-# Kill any existing processes using their PID files
-# This ensures clean shutdown before turning off LEDs
-pkill -F ./offpid.pid  # Kill any existing pixelsoff.py process
-pkill -F ./metarpid.pid  # Kill any existing metar.py process
+# --- Setup ---
+cd PLACEHOLDER_PROJECT_DIR || exit 1
 
-# Run the LED shutdown script in the background
-# Save the process ID to a file for future killing
-./metarmap_env/bin/python3 ./pixelsoff.py & echo $! > ./offpid.pid
+# Environment variables (cron runs with a minimal environment)
+export HOME=/home/ejmje
+export PATH=/usr/local/bin:/usr/bin:/bin
+
+# --- Logging ---
+LOGFILE="PLACEHOLDER_PROJECT_DIR/off.log"
+exec >> "$LOGFILE" 2>&1
+echo "===== Lights Off started at $(date) ====="
+
+# --- Kill old processes ---
+pkill -F ./offpid.pid 2>/dev/null
+pkill -F ./metarpid.pid 2>/dev/null
+
+# --- Run LED shutdown script ---
+# Capture both stdout and stderr from the Python process
+./metarmap_env/bin/python3 ./pixelsoff.py >> pixelsoff.log 2>&1 &
+echo $! > ./offpid.pid
+
+echo "LED shutdown script started (PID $(cat ./offpid.pid))"
+echo

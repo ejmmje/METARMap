@@ -1,14 +1,15 @@
 #!/bin/bash
+cd PLACEHOLDER_PROJECT_DIR || exit 1
 
-# METARMap Refresh Script
-# This script kills any existing METARMap processes and starts a new instance.
-# It is used by cron to refresh the weather data and LED display periodically.
+export HOME=/home/ejmje
+export PATH=/usr/local/bin:/usr/bin:/bin
 
-# Kill any existing processes using their PID files
-# This ensures clean shutdown before starting new processes
-pkill -F ./offpid.pid  # Kill pixelsoff.py process if running
-pkill -F ./metarpid.pid  # Kill metar.py process if running
+LOGFILE="PLACEHOLDER_PROJECT_DIR/refresh.log"
+exec >> "$LOGFILE" 2>&1
+echo "===== Refresh started at $(date) ====="
 
-# Start the main METARMap script in the background
-# Save the process ID to a file for future killing
-sudo ./metarmap_env/bin/python3 ./metar.py & echo $! > ./metarpid.pid
+pkill -F ./offpid.pid 2>/dev/null
+pkill -F ./metarpid.pid 2>/dev/null
+
+./metarmap_env/bin/python3 ./metar.py >> metar.log 2>&1 &
+echo $! > ./metarpid.pid

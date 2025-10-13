@@ -18,8 +18,7 @@ check_command() {
     fi
 }
 
-# Determine the current working directory (where the script is run from)
-# This will be used for paths in crontab and instructions
+# Get project directory
 PROJECT_DIR=$(pwd)
 echo "Project directory: $PROJECT_DIR"
 
@@ -47,7 +46,7 @@ echo "Creating virtual environment..."
 python3 -m venv metarmap_env
 check_command "Creating virtual environment"
 echo "Activating virtual environment..."
-source metarmap_env/bin/activate
+. metarmap_env/bin/activate
 check_command "Activating virtual environment"
 
 # Upgrade pip inside the virtual environment
@@ -96,6 +95,10 @@ chmod +x refresh.sh
 check_command "Setting permissions for refresh.sh"
 chmod +x lightsoff.sh
 check_command "Setting permissions for lightsoff.sh"
+
+# Update script paths to use the current project directory
+sed -i "s|PLACEHOLDER_PROJECT_DIR|$PROJECT_DIR|g" lightsoff.sh
+sed -i "s|PLACEHOLDER_PROJECT_DIR|$PROJECT_DIR|g" refresh.sh
 
 # Create configuration file if it doesn't exist
 # This file contains settings like LED count, colors, etc.
@@ -160,10 +163,10 @@ else
     echo "# For custom schedules, visit https://crontab.guru/" >> new_crontab
     echo "" >> new_crontab
     echo "# Run METARMap every 5 minutes from 7:00 AM to 7:00 PM" >> new_crontab
-    echo "*/5 7-18 * * * cd $PROJECT_DIR && $PROJECT_DIR/refresh.sh" >> new_crontab
+    echo "*/5 7-18 * * * $PROJECT_DIR/refresh.sh" >> new_crontab
     echo "" >> new_crontab
     echo "# Turn off lights at 8:00 PM" >> new_crontab
-    echo "0 20 * * * cd $PROJECT_DIR && $PROJECT_DIR/lightsoff.sh" >> new_crontab
+    echo "5 19 * * * $PROJECT_DIR/lightsoff.sh" >> new_crontab
 
     crontab new_crontab
     check_command "Setting up crontab"
