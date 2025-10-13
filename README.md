@@ -33,7 +33,7 @@ A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs
 
 1. Download or clone this repository to your Raspberry Pi:
    ```
-   git clone https://github.com/your-repo/METARMap.git
+   git clone --branch docker_support https://github.com/ejmmje/METARMap.git
    cd METARMap
    ```
 
@@ -43,11 +43,24 @@ A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs
    ```
    This will install dependencies, set permissions, and configure crontab.
 
-3. Reboot if I2C was enabled for the display.
+3. If using an external display, you may need to reboot after I2C was enabled for the display.
+    ```
+    sudo reboot
+    ```
+   
+4. This is it! The map should now run based on the example airports listed in the airports file. To edit them, see the Configuration section below.
 
 ## Configuration
 
-To edit configuration files on your Raspberry Pi, use a text editor like `nano`. For example, to edit the airports file:
+- To change configuration, edit the config json manually or run the setup script again:
+  ```
+  nano config.json
+  ```
+
+### - Changing airports display!!
+
+You need to do this *manually* by editing the `airports` file. If you have an external display and wish to only display a subset, you need to edit the `displayairports` file.
+For example, to edit the airports file:
 
 ```
 nano airports
@@ -71,7 +84,7 @@ KLAX
 
 If using the external display, edit `displayairports` to specify which airports to show details for. If not present, all airports will rotate.
 
-### Settings
+## Settings List for Reference or Custom Configuration
 
 Edit `config.json` to customize the behavior of METARMap. Below is a detailed explanation of each configuration option:
 
@@ -83,15 +96,15 @@ Edit `config.json` to customize the behavior of METARMap. Below is a detailed ex
 
 #### Color Definitions
 RGB color values (0-255) for different flight categories:
-- **`COLOR_VFR`**: Color for Visual Flight Rules (good weather). Default: `[255, 0, 0]` (Red)
-- **`COLOR_VFR_FADE`**: Faded color for VFR animations. Default: `[125, 0, 0]` (Dark Red)
+- **`COLOR_VFR`**: Color for Visual Flight Rules (good weather). Default: `[255, 0, 0]` (Green)
+- **`COLOR_VFR_FADE`**: Faded color for VFR animations. Default: `[125, 0, 0]` (Green Fade)
 - **`COLOR_MVFR`**: Color for Marginal VFR (moderate weather). Default: `[0, 0, 255]` (Blue)
-- **`COLOR_MVFR_FADE`**: Faded color for MVFR animations. Default: `[0, 0, 125]` (Dark Blue)
-- **`COLOR_IFR`**: Color for Instrument Flight Rules (poor weather). Default: `[0, 255, 0]` (Green)
-- **`COLOR_IFR_FADE`**: Faded color for IFR animations. Default: `[0, 125, 0]` (Dark Green)
-- **`COLOR_LIFR`**: Color for Low IFR (very poor weather). Default: `[0, 125, 125]` (Cyan)
-- **`COLOR_LIFR_FADE`**: Faded color for LIFR animations. Default: `[0, 75, 75]` (Dark Cyan)
-- **`COLOR_CLEAR`**: Color for no data or off. Default: `[0, 0, 0]` (Black)
+- **`COLOR_MVFR_FADE`**: Faded color for MVFR animations. Default: `[0, 0, 125]` (Blue Fade)
+- **`COLOR_IFR`**: Color for Instrument Flight Rules (poor weather). Default: `[0, 255, 0]` (Red)
+- **`COLOR_IFR_FADE`**: Faded color for IFR animations. Default: `[0, 125, 0]` (Red Fade)
+- **`COLOR_LIFR`**: Color for Low IFR (very poor weather). Default: `[0, 125, 125]` (Magenta)
+- **`COLOR_LIFR_FADE`**: Faded color for LIFR animations. Default: `[0, 75, 75]` (Magenta Fade)
+- **`COLOR_CLEAR`**: Color for no data or off. Default: `[0, 0, 0]` (Clear)
 - **`COLOR_LIGHTNING`**: Color for lightning conditions. Default: `[255, 255, 255]` (White)
 - **`COLOR_HIGH_WINDS`**: Color for high wind conditions. Default: `[255, 255, 0]` (Yellow)
 
@@ -128,18 +141,18 @@ RGB color values (0-255) for different flight categories:
 
 To test the setup:
 ```
-sudo python3 metar.py
+sudo metarmap_env/bin/python3 metar.py
 ```
 
 The LEDs should light up according to current weather conditions.
 
 ## Running Automatically
 
-The setup script configures crontab to run the map every 5 minutes between 7 AM and 10 PM, and turn off lights at 10:05 PM.
+The setup script configures crontab to run the map every 5 minutes between 7:00 AM and 9:59 PM, and turn off lights at 10:05 PM.
 
 To view or modify the schedule:
 ```
-crontab -e
+sudo crontab -e
 ```
 
 ## Flight Categories
@@ -162,6 +175,4 @@ crontab -e
 - Verify airport codes are correct ICAO codes
 - For display issues, ensure I2C is enabled and wiring is correct
 
-## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
