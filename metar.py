@@ -93,31 +93,38 @@ REPLACE_CAT_WITH_CLOSEST         = config['REPLACE_CAT_WITH_CLOSEST']  # Enable 
 print("Running metar.py at " + datetime.datetime.now().strftime('%d/%m/%Y %H:%M'))
 
 # Figure out sunrise/sunset times if astral is being used
+# Figure out sunrise/sunset times if astral is being used
 if astral is not None and USE_SUNRISE_SUNSET:
+    import astral.geocoder
+    import astral.sun
+    from zoneinfo import ZoneInfo
+    import datetime
+
     try:
-        ast = astral.Astral()
+        city = astral.geocoder.lookup(LOCATION, astral.geocoder.database())
+    except KeyError:
+        print("Error: Location not recognized, please check list of supported cities and reconfigure")
+        BRIGHT_TIME_START = datetime.time(8, 0)
+        DIM_TIME_START = datetime.time(19, 0)
+    else:
         try:
-            city = ast[LOCATION]
-        except KeyError:
-            print("Error: Location not recognized, please check list of supported cities and reconfigure")
-        else:
-            print(city)
-            sun = city.sun(date = datetime.datetime.now().date(), local = True)
+            # Convert the timezone string to a proper tzinfo object
+            tz = ZoneInfo(city.timezone)
+            today = datetime.date.today()
+
+            # Calculate sunrise/sunset with tzinfo
+            sun = astral.sun.sun(city.observer, date=today, tzinfo=tz)
             BRIGHT_TIME_START = sun['sunrise'].time()
             DIM_TIME_START = sun['sunset'].time()
-    except AttributeError:
-        import astral.geocoder
-        import astral.sun
-        try:
-            city = astral.geocoder.lookup(LOCATION, astral.geocoder.database())
-        except KeyError:
-            print("Error: Location not recognized, please check list of supported cities and reconfigure")
-        else:
-            print(city)
-            sun = astral.sun.sun(city.observer, date = datetime.datetime.now().date(), tzinfo=city.timezone)
-            BRIGHT_TIME_START = sun['sunrise'].time()
-            DIM_TIME_START = sun['sunset'].time()
-    print("Sunrise:" + BRIGHT_TIME_START.strftime('%H:%M') + " Sunset:" + DIM_TIME_START.strftime('%H:%M'))
+
+        except Exception as e:
+            print(f"Error calculating sunrise/sunset times: {e}. Falling back to default times.")
+            BRIGHT_TIME_START = datetime.time(8, 0)
+            DIM_TIME_START = datetime.time(19, 0)
+
+    print("Sunrise: " + BRIGHT_TIME_START.strftime('%H:%M') +
+          " Sunset: " + DIM_TIME_START.strftime('%H:%M'))
+
 
 # Initialize the LED strip
 bright = BRIGHT_TIME_START < datetime.datetime.now().time() < DIM_TIME_START
