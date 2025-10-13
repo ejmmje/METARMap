@@ -48,7 +48,7 @@ FADE_INSTEAD_OF_BLINK            = True
 WIND_BLINK_THRESHOLD             = 15
 HIGH_WINDS_THRESHOLD             = 25
 ALWAYS_BLINK_FOR_GUSTS           = False
-BLINK_SPEED                      = 5.0
+BLINK_SPEED                      = 2.0
 BLINK_TOTALTIME_SECONDS          = 300
 
 ACTIVATE_DAYTIME_DIMMING         = True
@@ -109,11 +109,12 @@ print("External Display:" + str(ACTIVATE_EXTERNAL_METAR_DISPLAY))
 pixels = neopixel.NeoPixel(LED_PIN, LED_COUNT, brightness = LED_BRIGHTNESS_DIM if (ACTIVATE_DAYTIME_DIMMING and bright == False) else LED_BRIGHTNESS, pixel_order = LED_ORDER, auto_write = False)
 
 # Read airports
-with open("PATH/TO/airports") as f:
+with open("/home/ejmje/workspace/test/airports") as f:
     airports = f.readlines()
 airports = [x.strip() for x in airports]
+
 try:
-    with open("PATH/TO/displayairports") as f2:
+    with open("/home/ejmje/workspace/test/displayairports") as f2:
         displayairports = f2.readlines()
     displayairports = [x.strip() for x in displayairports]
     print("Using subset airports for LED display")
@@ -255,6 +256,8 @@ for location in output:
             "lon": lon,
             "fltCat": fltCat
         })
+    if displayairports is None or icaoId in displayairports:
+        station_list.append(icaoId)
 
 print(f"Parsed {station_count} stations.")
 
@@ -340,19 +343,16 @@ while looplimit > 0:
     # Update actual LEDs all at once
     pixels.show()
 
-    # Rotate through airports METAR on external display
     if disp is not None:
         if displayTime <= DISPLAY_ROTATION_SPEED:
-            airport_to_display = display_list[displayAirportCounter]
-            displaymetar.outputMetar(
-                disp,
-                airport_to_display,
-                conditionDict.get(airport_to_display, None)
-            )
+            displaymetar.outputMetar(disp, station_list[displayAirportCounter],
+                                     conditionDict.get(station_list[displayAirportCounter], None))
+            displayTime += BLINK_SPEED
+            print("showing METAR Display for " + station_list[displayAirportCounter])
         else:
             displayTime = 0.0
-            displayAirportCounter = (displayAirportCounter + 1) % numAirports
-            print("showing METAR Display for " + display_list[displayAirportCounter])
+            displayAirportCounter = displayAirportCounter + 1 if displayAirportCounter < numAirports - 1 else 0
+            print("showing METAR Display for " + station_list[displayAirportCounter])
 
     # Switching between animation cycles
     time.sleep(BLINK_SPEED)
