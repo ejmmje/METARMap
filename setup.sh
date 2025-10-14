@@ -78,6 +78,8 @@ chmod +x refresh.sh
 check_command "Setting permissions for refresh.sh"
 chmod +x lightsoff.sh
 check_command "Setting permissions for lightsoff.sh"
+chmod +x update.sh
+check_command "Setting permissions for update.sh"
 
 # Update script paths to use the current project directory
 sed -i "s|PLACEHOLDER_PROJECT_DIR|$PROJECT_DIR|g" lightsoff.sh

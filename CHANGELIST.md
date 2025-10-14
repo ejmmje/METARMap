@@ -2,6 +2,13 @@
 # This file documents the version history and changes made to the METARMap project.
 # Each version includes the date and a description of the changes or fixes.
 
+## 2.0.0 (2025-10-14 - ejmje)
+- Major refactor of the codebase to improve readability and maintainability
+- Added self installation and self update functionality
+- Improved error handling and logging
+- Updated dependencies to the latest versions
+- Updated to new API endpoint for aviationweather.gov
+
 ## 1.6.3 (2024-04-15)
 
 - Fixed an issue where a metar record was received from the aviationweather.gov data, but wasn't actually sending a station id, which caused failure for people that were using such an airport

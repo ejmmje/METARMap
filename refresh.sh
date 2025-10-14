@@ -1,8 +1,10 @@
 #!/bin/bash
 cd PLACEHOLDER_PROJECT_DIR || exit 1
 
-export HOME=/home/ejmje
+# Environment variables (cron runs with a minimal environment)
+export HOME=/home/$USER
 export PATH=/usr/local/bin:/usr/bin:/bin
+
 
 LOGFILE="PLACEHOLDER_PROJECT_DIR/refresh.log"
 exec >> "$LOGFILE" 2>&1

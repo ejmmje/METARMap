@@ -7,7 +7,7 @@
 cd PLACEHOLDER_PROJECT_DIR || exit 1
 
 # Environment variables (cron runs with a minimal environment)
-export HOME=/home/ejmje
+export HOME=/home/$USER
 export PATH=/usr/local/bin:/usr/bin:/bin
 
 # --- Logging ---

@@ -31,6 +31,8 @@ A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs
 
 ## Installation
 
+***For just updating the map for a new update - [skip to here](#updates)***
+
 1. Log into your Raspberry Pi via SSH or terminal.
 
 2. Download or clone this repository to your Raspberry Pi. If needed install git first:
@@ -128,6 +130,12 @@ They follow this general format:
 5 22 * * * /This/is/Different/for/Everyone/lightsoff.sh
 ```
 
+## Updates
+To update the code only, run the following commands in the METARMap directory:
+```
+sudo bash update.sh
+```
+This code will save your airports and displayairports files, pull the latest code from GitHub, and restore your airport files. It will initiate a re-run of the setup file as well. 
 
 ## Settings List for Reference or Custom Configuration
 
