@@ -11,5 +11,8 @@ echo "===== Refresh started at $(date) ====="
 pkill -F ./offpid.pid 2>/dev/null
 pkill -F ./metarpid.pid 2>/dev/null
 
+# Truncate metar.log to prevent it from growing too large
+> metar.log
+
 ./metarmap_env/bin/python3 ./metar.py >> metar.log 2>&1 &
 echo $! > ./metarpid.pid
