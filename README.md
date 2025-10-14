@@ -31,7 +31,7 @@ A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs
 
 ## Installation
 
-***For just updating the map for a new update - [skip to here](#updates)***
+***If you have already installed this version before and just need to update to the newest version - [skip to here](#updates)***
 
 1. Log into your Raspberry Pi via SSH or terminal.
 
