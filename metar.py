@@ -13,6 +13,7 @@ import time  # For sleep delays and timing
 import datetime  # For date and time operations
 import math  # For mathematical calculations (e.g., haversine distance)
 import requests  # For HTTP requests to fetch METAR data
+import re # For regular expressions
 
 # Import optional libraries with fallbacks
 try:
@@ -200,6 +201,11 @@ conditionDict = {}
 station_list = []
 station_meta = []
 
+# Lightning Pattern
+pattern = re.compile(
+    r"\b(VCTS|[-+]?TS(?:RA|SN|PL|GR|SG|GS|SH|UP|SP|SNRA)?|LTG(?:IC|CC|CG|CA)?|(?:FRQ|OCNL|CONS|DSNT)\s+LTG)\b"
+)
+
 for location in output:
     icaoId = safe_str(location.get("icaoId"))
     receiptTime = safe_str(location.get("receiptTime"))
@@ -249,10 +255,9 @@ for location in output:
     fltCat = safe_str(location.get("fltCat"))
 
     # --- Lightning detection ---
-    raw_upper = rawOb.upper()
-    lightning = not (
-        (raw_upper.find("LTG", 4) == -1 and raw_upper.find("TS", 4) == -1)
-        or raw_upper.find("TSNO", 4) != -1
+    lightning = (
+            not re.search(r"\bTSNO\b", rawOb.upper()) and
+            bool(re.search(pattern, rawOb.upper()))
     )
 
     # --- Populate results ---
