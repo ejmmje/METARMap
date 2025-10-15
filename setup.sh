@@ -64,7 +64,7 @@ check_command "Upgrading pip"
 # Install required Python libraries in the virtual environment
 # These are core dependencies for LED control and HTTP requests
 echo -e "${GREEN}Installing required Python libraries...${NC}"
-pip install rpi_ws281x adafruit-circuitpython-neopixel adafruit-blinka requests
+pip install rpi_ws281x adafruit-circuitpython-neopixel adafruit-blinka requests RPi.GPIO
 check_command "Installing required libraries"
 
 # Deactivate the virtual environment
@@ -156,7 +156,7 @@ fi
 
 # External display
 echo -e "${BLUE}ACTIVATE_EXTERNAL_METAR_DISPLAY: Enable OLED display for showing detailed METAR information.${NC}"
-read -p "Enable external METAR display? (y/n, default: y): " display
+read -p "Enable external METAR display? (y/n, default: n): " display
 case $display in
     [Nn]* ) ACTIVATE_EXTERNAL_METAR_DISPLAY=false ;;
     * ) ACTIVATE_EXTERNAL_METAR_DISPLAY=true ;;
