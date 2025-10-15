@@ -105,7 +105,7 @@ If using the external display, edit `displayairports` to specify which airports 
 Edit the `config.json` file to customize settings such as colors, animation speeds, and more.
 
 ```
-nano config.json
+sudo nano config.json
 ```
 
 ## Final Considerations

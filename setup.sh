@@ -36,6 +36,12 @@ check_command "apt-get update"
 sudo apt-get upgrade -y
 check_command "apt-get upgrade"
 
+sudo apt install -y python3-dev python3-pip build-essential \
+libjpeg-dev zlib1g-dev libpng-dev libfreetype6-dev liblcms2-dev \
+libtiff5-dev libwebp-dev libopenjp2-7-dev libraqm-dev libharfbuzz-dev \
+libfribidi-dev libimagequant-dev libxcb1-dev
+
+
 # Install Python 3, pip, and virtual environment support
 # These are required for creating and managing the virtual environment
 echo -e "${GREEN}Installing Python3 and pip3...${NC}"
@@ -158,8 +164,8 @@ fi
 echo -e "${BLUE}ACTIVATE_EXTERNAL_METAR_DISPLAY: Enable OLED display for showing detailed METAR information.${NC}"
 read -p "Enable external METAR display? (y/n, default: n): " display
 case $display in
-    [Nn]* ) ACTIVATE_EXTERNAL_METAR_DISPLAY=false ;;
-    * ) ACTIVATE_EXTERNAL_METAR_DISPLAY=true ;;
+    [Yy]* ) ACTIVATE_EXTERNAL_METAR_DISPLAY=true ;;
+    * ) ACTIVATE_EXTERNAL_METAR_DISPLAY=false ;;
 esac
 
 # Legend
@@ -297,7 +303,7 @@ else
     echo "# Run METARMap every 5 minutes from 7:00 AM to 9:00 PM" >> new_crontab
     echo "*/5 7-21 * * * $PROJECT_DIR/refresh.sh" >> new_crontab
     echo "" >> new_crontab
-    echo "# Turn off lights at 8:00 PM" >> new_crontab
+    echo "# Turn off lights at 10:00 PM" >> new_crontab
     echo "5 22 * * * $PROJECT_DIR/lightsoff.sh" >> new_crontab
 
     crontab new_crontab
@@ -317,36 +323,58 @@ echo "The system will run automatically via crontab."
 # Optional test run
 echo ""
 echo "Would you like to run a quick test of the LED colors and display?"
-echo "The test will light up the first 7 LEDs with colors for VFR (red), MVFR (blue), IFR (green), LIFR (cyan), lightning (white), high winds (yellow), and clear (off)."
+echo "The test will light up all LEDs in sequence with colors for VFR (red), MVFR (blue), IFR (green), LIFR (cyan), lightning (white), high winds (yellow), and clear (off)."
 echo "If external display is enabled, it will show a sample METAR entry."
 read -p "Run test? (y/n): " run_test
 if [ "$run_test" = "y" ]; then
     echo -e "${GREEN}Running LED and display test...${NC}"
     . metarmap_env/bin/activate
-    python3 -c "
+    python3 - <<'PYCODE'
 import board
 import neopixel
 import time
 import json
+
 try:
     with open('config.json') as f:
         config = json.load(f)
+
     LED_COUNT = config['LED_COUNT']
     LED_PIN = eval(config['LED_PIN'])
     LED_BRIGHTNESS = config['LED_BRIGHTNESS']
     LED_ORDER = eval(config['LED_ORDER'])
     ACTIVATE_EXTERNAL_METAR_DISPLAY = config['ACTIVATE_EXTERNAL_METAR_DISPLAY']
-    pixels = neopixel.NeoPixel(LED_PIN, LED_COUNT, brightness=LED_BRIGHTNESS, pixel_order=LED_ORDER, auto_write=False)
-    # Test colors: VFR, MVFR, IFR, LIFR, lightning, high winds, clear
-    colors = [(255,0,0), (0,0,255), (0,255,0), (0,125,125), (255,255,255), (255,255,0), (0,0,0)]
-    for i, color in enumerate(colors):
-        if i < LED_COUNT:
-            pixels[i] = color
-            print(f'testing LED {i} with color {color}')
-        else:
-            break
+
+    pixels = neopixel.NeoPixel(
+        LED_PIN, LED_COUNT,
+        brightness=LED_BRIGHTNESS,
+        pixel_order=LED_ORDER,
+        auto_write=False
+    )
+
+    # Define test colors
+    colors = [
+        (255, 0, 0),    # VFR (red)
+        (0, 0, 255),    # MVFR (blue)
+        (0, 255, 0),    # IFR (green)
+        (0, 125, 125),  # LIFR (cyan)
+        (255, 255, 255),# Lightning (white)
+        (255, 255, 0),  # High winds (yellow)
+        (0, 0, 0)       # Clear (off)
+    ]
+
+    # Cycle through colors for all LEDs
+    for color in colors:
+        print(f"Testing all LEDs with color {color}")
+        pixels.fill(color)
+        pixels.show()
+        time.sleep(1.5)
+
+    # Turn off LEDs after test
+    pixels.fill((0, 0, 0))
     pixels.show()
-    time.sleep(5)
+
+    # Test external display if enabled
     if ACTIVATE_EXTERNAL_METAR_DISPLAY:
         try:
             import displaymetar
@@ -357,12 +385,12 @@ try:
             time.sleep(5)
             displaymetar.clearScreen(disp)
         except Exception as e:
-            print(f'Display test failed: {e}')
-    pixels.fill((0,0,0))
-    pixels.show()
-    print('Test complete')
+            print(f"Display test failed: {e}")
+
+    print("Test complete")
+
 except Exception as e:
-    print(f'Test failed: {e}')
-"
+    print(f"Test failed: {e}")
+PYCODE
     deactivate
 fi
