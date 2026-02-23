@@ -351,3 +351,71 @@ rm -f "$CURRENT_CRON" "$NEW_CRON"
 echo -e "${BOLD}Setup complete!${NC}"
 echo "To test manually, run: sudo $PROJECT_DIR/metarmap_env/bin/python3 $PROJECT_DIR/metar.py"
 echo "To reconfigure prompts, run: sudo bash $PROJECT_DIR/setup.sh --reconfigure"
+
+# Run LED/display smoke test every time setup executes
+echo -e "${GREEN}Running LED and display test...${NC}"
+# shellcheck source=/dev/null
+source metarmap_env/bin/activate
+python3 - <<'PYCODE'
+import json
+import time
+
+import board
+import neopixel
+
+try:
+    with open("config.json") as f:
+        config = json.load(f)
+
+    led_count = int(config.get("LED_COUNT", 50))
+    led_pin = eval(config.get("LED_PIN", "board.D18"))
+    led_order = eval(config.get("LED_ORDER", "neopixel.GRB"))
+    led_brightness = float(config.get("LED_BRIGHTNESS", 0.5))
+    use_display = bool(config.get("ACTIVATE_EXTERNAL_METAR_DISPLAY", False))
+
+    test_steps = [
+        ("VFR", tuple(config.get("COLOR_VFR", [255, 0, 0]))),
+        ("MVFR", tuple(config.get("COLOR_MVFR", [0, 0, 255]))),
+        ("IFR", tuple(config.get("COLOR_IFR", [0, 255, 0]))),
+        ("LIFR", tuple(config.get("COLOR_LIFR", [0, 125, 125]))),
+        ("LIGHTNING", tuple(config.get("COLOR_LIGHTNING", [255, 255, 255]))),
+        ("HIGH_WINDS", tuple(config.get("COLOR_HIGH_WINDS", [255, 255, 0]))),
+        ("CLEAR", tuple(config.get("COLOR_CLEAR", [0, 0, 0]))),
+    ]
+
+    pixels = neopixel.NeoPixel(
+        led_pin,
+        led_count,
+        brightness=led_brightness,
+        pixel_order=led_order,
+        auto_write=False,
+    )
+
+    for name, color in test_steps:
+        print(f"Testing {name}: {color}")
+        pixels.fill(color)
+        pixels.show()
+        time.sleep(1.5)
+
+    pixels.fill((0, 0, 0))
+    pixels.show()
+
+    if use_display:
+        try:
+            import displaymetar
+            disp = displaymetar.startDisplay()
+            displaymetar.clearScreen(disp)
+            displaymetar.outputMetar(
+                disp, "TEST", {"flightCategory": "VFR", "tempC": 20, "windSpeed": 10}
+            )
+            print("Testing external display with sample METAR")
+            time.sleep(5)
+            displaymetar.clearScreen(disp)
+        except Exception as exc:
+            print(f"Display test failed: {exc}")
+
+    print("Test complete")
+except Exception as exc:
+    print(f"Test failed: {exc}")
+PYCODE
+deactivate
