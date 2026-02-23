@@ -336,6 +336,14 @@ deactivate
 # Ensure script permissions
 chmod +x setup.sh update.sh refresh.sh lightsoff.sh
 
+# Update script paths for cron-executed helpers
+# Keep this idempotent: if placeholders were already replaced, these calls are no-ops.
+PROJECT_DIR_SED_SAFE="${PROJECT_DIR//\\/\\\\}"
+PROJECT_DIR_SED_SAFE="${PROJECT_DIR_SED_SAFE//|/\\|}"
+PROJECT_DIR_SED_SAFE="${PROJECT_DIR_SED_SAFE//&/\\&}"
+sed -i "s|PLACEHOLDER_PROJECT_DIR|$PROJECT_DIR_SED_SAFE|g" refresh.sh
+sed -i "s|PLACEHOLDER_PROJECT_DIR|$PROJECT_DIR_SED_SAFE|g" lightsoff.sh
+
 # Create airports file if it doesn't exist
 if [[ ! -f airports ]]; then
     echo "Creating sample airports file..."
