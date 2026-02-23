@@ -12,6 +12,7 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
+SETUP_STATE_FILE="$PROJECT_DIR/.setup_initialized"
 cd "$PROJECT_DIR"
 
 RUN_NONINTERACTIVE=false
@@ -42,7 +43,25 @@ run_as_root() {
 }
 
 is_interactive() {
-    [[ -t 0 && -t 1 && "$RUN_NONINTERACTIVE" == false ]]
+    [[ "$RUN_NONINTERACTIVE" == false ]] || return 1
+    if [[ -t 0 && -t 1 ]]; then
+        return 0
+    fi
+    [[ -r /dev/tty && -w /dev/tty ]]
+}
+
+read_prompt() {
+    local question="$1"
+    local response=""
+
+    if [[ -t 0 && -t 1 ]]; then
+        read -r -p "$question" response || true
+    elif [[ -r /dev/tty && -w /dev/tty ]]; then
+        printf "%s" "$question" > /dev/tty
+        IFS= read -r response < /dev/tty || true
+    fi
+
+    echo "$response"
 }
 
 prompt_text() {
@@ -55,7 +74,7 @@ prompt_text() {
     fi
 
     local response
-    read -r -p "$question" response || true
+    response="$(read_prompt "$question")"
     response="${response:-$default_value}"
     echo "$response"
 }
@@ -101,7 +120,7 @@ prompt_bool() {
     fi
 
     local response
-    read -r -p "$question [$prompt_text_value]: " response || true
+    response="$(read_prompt "$question [$prompt_text_value]: ")"
     response="${response:-$default_value}"
 
     case "${response,,}" in
@@ -162,16 +181,34 @@ SHOW_LEGEND=false
 REPLACE_CAT_WITH_CLOSEST=true
 
 KEEP_EXISTING_CONFIG=false
-if [[ -f config.json && "$FORCE_RECONFIGURE" == false ]]; then
+FIRST_RUN=false
+if [[ ! -f "$SETUP_STATE_FILE" ]]; then
+    FIRST_RUN=true
+fi
+
+if [[ "$FIRST_RUN" == true && "$RUN_NONINTERACTIVE" == false ]] && ! is_interactive; then
+    echo -e "${YELLOW}First-time setup requires an interactive terminal for configuration questions.${NC}"
+    echo "Run setup directly in a terminal, or use --non-interactive to accept defaults."
+    exit 1
+fi
+
+if [[ "$FORCE_RECONFIGURE" == true ]]; then
+    KEEP_EXISTING_CONFIG=false
+elif [[ "$FIRST_RUN" == true ]]; then
+    if is_interactive; then
+        echo -e "${BLUE}First-time setup detected. Configuration questions will be asked.${NC}"
+        KEEP_EXISTING_CONFIG=false
+    elif [[ -f config.json ]]; then
+        KEEP_EXISTING_CONFIG=true
+    else
+        KEEP_EXISTING_CONFIG=false
+    fi
+elif [[ -f config.json ]]; then
     if is_interactive; then
         KEEP_EXISTING_CONFIG="$(prompt_bool "config.json already exists. Keep current configuration?" "y")"
     else
         KEEP_EXISTING_CONFIG=true
     fi
-fi
-
-if [[ "$FORCE_RECONFIGURE" == true ]]; then
-    KEEP_EXISTING_CONFIG=false
 fi
 
 if [[ "$KEEP_EXISTING_CONFIG" == false ]]; then
@@ -347,6 +384,8 @@ CRON_EOF
 
 run_as_root crontab "$NEW_CRON"
 rm -f "$CURRENT_CRON" "$NEW_CRON"
+
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$SETUP_STATE_FILE"
 
 echo -e "${BOLD}Setup complete!${NC}"
 echo "To test manually, run: sudo $PROJECT_DIR/metarmap_env/bin/python3 $PROJECT_DIR/metar.py"
