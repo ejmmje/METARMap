@@ -188,11 +188,48 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+def find_nearest_station(lat, lon, candidates):
+    nearest = None
+    nearest_dist = float("inf")
+    for ref in candidates:
+        dist = haversine(lat, lon, ref["lat"], ref["lon"])
+        if dist < nearest_dist:
+            nearest = ref
+            nearest_dist = dist
+    return nearest, nearest_dist
+
+def fetch_station_coordinates(station_ids):
+    station_ids = [s for s in station_ids if s and s != "NULL"]
+    if not station_ids:
+        return {}
+
+    station_url = f'https://aviationweather.gov/api/data/stationinfo?ids={",".join(station_ids)}&format=json'
+    try:
+        station_req = requests.get(station_url, timeout=10)
+        station_req.raise_for_status()
+        station_output = station_req.json()
+    except (requests.RequestException, ValueError) as e:
+        print(f"Could not fetch station metadata for missing METARs: {e}")
+        return {}
+
+    coords = {}
+    for station in station_output:
+        icao_id = safe_str(station.get("icaoId"))
+        try:
+            lat = float(str(station.get("lat")).strip())
+            lon = float(str(station.get("lon")).strip())
+        except (TypeError, ValueError):
+            continue
+        if icao_id:
+            coords[icao_id] = {"lat": lat, "lon": lon}
+    return coords
+
 # --- Fetch METAR data ---
-url = f'https://aviationweather.gov/api/data/metar?ids={",".join([item for item in airports if item != "NULL"])}&format=json&taf=false'
+url = f'https://aviationweather.gov/api/data/metar?ids={",".join([item for item in airports if item != "NULL"])}&format=json&taf=false&hours=2'
 print(url)
 
 req = requests.get(url)
+#print(req.text)
 output = json.loads(req.text)
 
 # --- Parse response ---
@@ -296,16 +333,29 @@ valid_stations = [s for s in station_meta if s["fltCat"] and s["lat"] and s["lon
 
 for s in station_meta:
     if not s["fltCat"] and s["lat"] and s["lon"] and valid_stations and REPLACE_CAT_WITH_CLOSEST:
-        nearest = None
-        nearest_dist = float("inf")
-        for ref in valid_stations:
-            dist = haversine(s["lat"], s["lon"], ref["lat"], ref["lon"])
-            if dist < nearest_dist:
-                nearest = ref
-                nearest_dist = dist
+        nearest, nearest_dist = find_nearest_station(s["lat"], s["lon"], valid_stations)
         if nearest:
             conditionDict[s["icaoId"]]["flightCategory"] = nearest["fltCat"]
             print(f"{s['icaoId']} missing fltCat — using nearest {nearest['icaoId']} ({nearest_dist:.1f} km, {nearest['fltCat']})")
+
+# --- fill airports missing from METAR response by nearest valid station ---
+missing_airports = [code for code in airports if code != "NULL" and code not in conditionDict]
+if missing_airports and valid_stations and REPLACE_CAT_WITH_CLOSEST:
+    missing_coords = fetch_station_coordinates(missing_airports)
+    for missing_code in missing_airports:
+        coords = missing_coords.get(missing_code)
+        if not coords:
+            print(f"{missing_code} missing METAR — no station coordinates found for nearest fallback")
+            continue
+
+        nearest, nearest_dist = find_nearest_station(coords["lat"], coords["lon"], valid_stations)
+        if nearest:
+            nearest_conditions = conditionDict.get(nearest["icaoId"], {})
+            if nearest_conditions:
+                conditionDict[missing_code] = dict(nearest_conditions)
+                if missing_code not in station_list:
+                    station_list.append(missing_code)
+                print(f"{missing_code} missing METAR — using nearest {nearest['icaoId']} ({nearest_dist:.1f} km, {nearest['fltCat']})")
 
 
 # Start up external display output
