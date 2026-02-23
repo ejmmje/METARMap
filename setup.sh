@@ -1,191 +1,224 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# METARMap Setup Script
-# This script automates the installation and configuration of the METARMap project on a Raspberry Pi.
-# It sets up a virtual environment, installs dependencies, configures files, and schedules cron jobs.
-# Run this script with sudo privileges: sudo bash setup.sh
-
-echo -e "${BOLD}METARMap Setup Script${NC}"
-echo "This script will install the necessary dependencies and set up the METARMap project."
-echo "Please run this script as a user with sudo privileges."
-
-# Function to check if the previous command succeeded
-# If not, print an error message and exit the script
-check_command() {
-    if [ $? -ne 0 ]; then
-        echo "Error: $1 failed. Please check your system and try again."
-        exit 1
-    fi
-}
+set -Eeuo pipefail
+trap 'echo "Error: setup failed on line $LINENO."; exit 1' ERR
 
 # ANSI color codes for better formatting
 BOLD='\033[1m'
 GREEN='\033[32m'
 BLUE='\033[34m'
-NC='\033[0m'  # No Color
+YELLOW='\033[33m'
+NC='\033[0m'
 
-# Get project directory
-PROJECT_DIR=$(pwd)
-echo "Project directory: $PROJECT_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
+cd "$PROJECT_DIR"
 
-# Update the system's package list and upgrade installed packages
-# This ensures the system is up-to-date before installing new software
-echo -e "${GREEN}Updating system packages...${NC}"
-sudo apt-get update
-check_command "apt-get update"
-sudo apt-get upgrade -y
-check_command "apt-get upgrade"
+RUN_NONINTERACTIVE=false
+FORCE_RECONFIGURE=false
 
-sudo apt install -y python3-dev python3-pip build-essential \
-libjpeg-dev zlib1g-dev libpng-dev libfreetype6-dev liblcms2-dev \
-libtiff5-dev libwebp-dev libopenjp2-7-dev libraqm-dev libharfbuzz-dev \
-libfribidi-dev libimagequant-dev libxcb1-dev
+for arg in "$@"; do
+    case "$arg" in
+        --non-interactive)
+            RUN_NONINTERACTIVE=true
+            ;;
+        --reconfigure)
+            FORCE_RECONFIGURE=true
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Usage: bash setup.sh [--non-interactive] [--reconfigure]"
+            exit 1
+            ;;
+    esac
+done
 
+run_as_root() {
+    if [[ "$EUID" -eq 0 ]]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
 
-# Install Python 3, pip, and virtual environment support
-# These are required for creating and managing the virtual environment
-echo -e "${GREEN}Installing Python3 and pip3...${NC}"
-sudo apt-get install -y python3 python3-pip python3-venv
-check_command "apt-get install python3 python3-pip python3-venv"
+is_interactive() {
+    [[ -t 0 && -t 1 && "$RUN_NONINTERACTIVE" == false ]]
+}
 
-# Create a virtual environment for Python packages
-# This isolates the project's dependencies from the system Python
-if [ -d metarmap_env ]; then
-    echo "Removing existing virtual environment for clean slate..."
-    rm -rf metarmap_env
-fi
-echo -e "${GREEN}Creating virtual environment...${NC}"
-python3 -m venv metarmap_env
-check_command "Creating virtual environment"
-echo -e "${GREEN}Activating virtual environment...${NC}"
-. metarmap_env/bin/activate
-check_command "Activating virtual environment"
+prompt_text() {
+    local question="$1"
+    local default_value="$2"
 
-# Upgrade pip inside the virtual environment
-# Ensures the latest version of pip is used for installations
-echo -e "${GREEN}Upgrading pip in virtual environment...${NC}"
-pip install --upgrade pip
-check_command "Upgrading pip"
+    if ! is_interactive; then
+        echo "$default_value"
+        return
+    fi
 
-# Install required Python libraries in the virtual environment
-# These are core dependencies for LED control and HTTP requests
-echo -e "${GREEN}Installing required Python libraries...${NC}"
-pip install rpi_ws281x adafruit-circuitpython-neopixel adafruit-blinka requests RPi.GPIO
-check_command "Installing required libraries"
+    local response
+    read -r -p "$question" response || true
+    response="${response:-$default_value}"
+    echo "$response"
+}
 
-# Deactivate the virtual environment
-# No longer needed until runtime
-deactivate
+prompt_int() {
+    local question="$1"
+    local default_value="$2"
+    local response
 
-# Set execute permissions on shell scripts
-# Allows them to be run directly
-echo -e "${GREEN}Setting permissions...${NC}"
-chmod +x refresh.sh
-check_command "Setting permissions for refresh.sh"
-chmod +x lightsoff.sh
-check_command "Setting permissions for lightsoff.sh"
-chmod +x update.sh
-check_command "Setting permissions for update.sh"
+    response="$(prompt_text "$question" "$default_value")"
 
-# Update script paths to use the current project directory
-sed -i "s|PLACEHOLDER_PROJECT_DIR|$PROJECT_DIR|g" lightsoff.sh
-sed -i "s|PLACEHOLDER_PROJECT_DIR|$PROJECT_DIR|g" refresh.sh
+    if [[ "$response" =~ ^[0-9]+$ ]]; then
+        echo "$response"
+    else
+        echo "$default_value"
+    fi
+}
 
-# Create configuration file based on user input
-echo -e "${BOLD}Configuring METARMap settings...${NC}"
-echo "Please answer the following questions to customize your setup."
-echo ""
+prompt_bool() {
+    local question="$1"
+    local default_value="$2"
+    local prompt_text_value
+    local default_bool
 
-# LED Count
-read -p "How many LEDs are in your strip? (default: 50): " LED_COUNT
-LED_COUNT=${LED_COUNT:-50}
-
-# Wind animation
-echo -e "${BLUE}ACTIVATE_WINDCONDITION_ANIMATION: Enable blinking/fading for windy conditions (LEDs animate when wind exceeds threshold).${NC}"
-read -p "Enable wind condition animation? (y/n, default: y): " wind_anim
-case $wind_anim in
-    [Nn]* ) ACTIVATE_WINDCONDITION_ANIMATION=false ;;
-    * ) ACTIVATE_WINDCONDITION_ANIMATION=true ;;
-esac
-
-# Lightning animation
-echo -e "${BLUE}ACTIVATE_LIGHTNING_ANIMATION: Enable flashing for lightning in the vicinity of airports.${NC}"
-read -p "Enable lightning animation? (y/n, default: y): " lightning_anim
-case $lightning_anim in
-    [Nn]* ) ACTIVATE_LIGHTNING_ANIMATION=false ;;
-    * ) ACTIVATE_LIGHTNING_ANIMATION=true ;;
-esac
-
-# Fade vs blink
-echo -e "${BLUE}FADE_INSTEAD_OF_BLINK: Use fade effect instead of on/off blinking for animations.${NC}"
-read -p "Use fade instead of blink? (y/n, default: y): " fade_blink
-case $fade_blink in
-    [Nn]* ) FADE_INSTEAD_OF_BLINK=false ;;
-    * ) FADE_INSTEAD_OF_BLINK=true ;;
-esac
-
-# Gusts always blink
-echo -e "${BLUE}ALWAYS_BLINK_FOR_GUSTS: Always animate LEDs for gusts, regardless of wind speed.${NC}"
-read -p "Always blink for gusts? (y/n, default: n): " gusts_blink
-case $gusts_blink in
-    [Yy]* ) ALWAYS_BLINK_FOR_GUSTS=true ;;
-    * ) ALWAYS_BLINK_FOR_GUSTS=false ;;
-esac
-
-# Daytime dimming
-echo -e "${BLUE}ACTIVATE_DAYTIME_DIMMING: Enable brightness dimming during the day to save energy.${NC}"
-read -p "Enable daytime dimming? (y/n, default: y): " dimming
-case $dimming in
-    [Nn]* ) ACTIVATE_DAYTIME_DIMMING=false ;;
-    * ) ACTIVATE_DAYTIME_DIMMING=true ;;
-esac
-
-# If dimming enabled, ask for location
-if [ "$ACTIVATE_DAYTIME_DIMMING" = true ]; then
-    echo -e "${BLUE}USE_SUNRISE_SUNSET: Use actual sunrise/sunset times for dimming (requires city).${NC}"
-    read -p "Use sunrise/sunset times? (y/n, default: y): " sunrise_sunset
-    case $sunrise_sunset in
-        [Nn]* ) USE_SUNRISE_SUNSET=false ;;
-        * ) USE_SUNRISE_SUNSET=true ;;
+    case "${default_value,,}" in
+        y|yes|true)
+            prompt_text_value="Y/n"
+            default_bool="true"
+            ;;
+        n|no|false)
+            prompt_text_value="y/N"
+            default_bool="false"
+            ;;
+        *)
+            prompt_text_value="Y/n"
+            default_bool="true"
+            ;;
     esac
 
-    if [ "$USE_SUNRISE_SUNSET" = true ]; then
-        read -p "Enter your city for sunrise/sunset calculations (default: Detroit): " LOCATION
-        LOCATION=${LOCATION:-Detroit}
-    else
-        LOCATION="Detroit"
+    if ! is_interactive; then
+        echo "$default_bool"
+        return
     fi
-else
-    USE_SUNRISE_SUNSET=false
-    LOCATION="Detroit"
+
+    local response
+    read -r -p "$question [$prompt_text_value]: " response || true
+    response="${response:-$default_value}"
+
+    case "${response,,}" in
+        y|yes|true)
+            echo "true"
+            ;;
+        n|no|false)
+            echo "false"
+            ;;
+        *)
+            echo "$default_bool"
+            ;;
+    esac
+}
+
+echo -e "${BOLD}METARMap Setup Script${NC}"
+echo "Project directory: $PROJECT_DIR"
+
+if [[ "$RUN_NONINTERACTIVE" == true ]]; then
+    echo -e "${YELLOW}Running in non-interactive mode. Existing config will be preserved if present.${NC}"
 fi
 
-# External display
-echo -e "${BLUE}ACTIVATE_EXTERNAL_METAR_DISPLAY: Enable OLED display for showing detailed METAR information.${NC}"
-read -p "Enable external METAR display? (y/n, default: n): " display
-case $display in
-    [Yy]* ) ACTIVATE_EXTERNAL_METAR_DISPLAY=true ;;
-    * ) ACTIVATE_EXTERNAL_METAR_DISPLAY=false ;;
-esac
+# Update package index and install required system packages
+echo -e "${GREEN}Installing system dependencies...${NC}"
+run_as_root apt-get update
+run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    python3 python3-pip python3-venv python3-dev build-essential git \
+    libjpeg-dev zlib1g-dev libpng-dev libfreetype6-dev liblcms2-dev \
+    libtiff-dev libwebp-dev libopenjp2-7-dev libraqm-dev libharfbuzz-dev \
+    libfribidi-dev libxcb1-dev
 
-# Legend
-echo -e "${BLUE}SHOW_LEGEND: Display a color legend on extra LEDs to show what each color means.${NC}"
-read -p "Show color legend? (y/n, default: n): " legend
-case $legend in
-    [Yy]* ) SHOW_LEGEND=true ;;
-    * ) SHOW_LEGEND=false ;;
-esac
+# Create or reuse virtual environment
+if [[ ! -d metarmap_env ]]; then
+    echo -e "${GREEN}Creating virtual environment...${NC}"
+    python3 -m venv metarmap_env
+else
+    echo -e "${GREEN}Reusing existing virtual environment...${NC}"
+fi
 
-# Replace missing categories
-echo -e "${BLUE}REPLACE_CAT_WITH_CLOSEST: Fill missing flight categories with data from the nearest station.${NC}"
-read -p "Replace missing categories with closest station? (y/n, default: y): " replace_cat
-case $replace_cat in
-    [Nn]* ) REPLACE_CAT_WITH_CLOSEST=false ;;
-    * ) REPLACE_CAT_WITH_CLOSEST=true ;;
-esac
+# Activate venv and install required Python libraries
+# shellcheck source=/dev/null
+source metarmap_env/bin/activate
+echo -e "${GREEN}Installing Python dependencies...${NC}"
+pip install --upgrade pip wheel
+pip install --upgrade rpi_ws281x adafruit-circuitpython-neopixel adafruit-blinka requests RPi.GPIO
 
-# Generate config.json
-cat > config.json << EOF
+# Default configuration values
+LED_COUNT=50
+ACTIVATE_WINDCONDITION_ANIMATION=true
+ACTIVATE_LIGHTNING_ANIMATION=true
+FADE_INSTEAD_OF_BLINK=true
+ALWAYS_BLINK_FOR_GUSTS=false
+ACTIVATE_DAYTIME_DIMMING=true
+USE_SUNRISE_SUNSET=true
+LOCATION="Detroit"
+ACTIVATE_EXTERNAL_METAR_DISPLAY=false
+SHOW_LEGEND=false
+REPLACE_CAT_WITH_CLOSEST=true
+
+KEEP_EXISTING_CONFIG=false
+if [[ -f config.json && "$FORCE_RECONFIGURE" == false ]]; then
+    if is_interactive; then
+        KEEP_EXISTING_CONFIG="$(prompt_bool "config.json already exists. Keep current configuration?" "y")"
+    else
+        KEEP_EXISTING_CONFIG=true
+    fi
+fi
+
+if [[ "$FORCE_RECONFIGURE" == true ]]; then
+    KEEP_EXISTING_CONFIG=false
+fi
+
+if [[ "$KEEP_EXISTING_CONFIG" == false ]]; then
+    echo -e "${BOLD}Configuring METARMap settings...${NC}"
+
+    LED_COUNT="$(prompt_int "How many LEDs are in your strip? (default: 50): " "50")"
+
+    echo -e "${BLUE}ACTIVATE_WINDCONDITION_ANIMATION: Blink/fade on windy conditions.${NC}"
+    ACTIVATE_WINDCONDITION_ANIMATION="$(prompt_bool "Enable wind condition animation?" "y")"
+
+    echo -e "${BLUE}ACTIVATE_LIGHTNING_ANIMATION: Flash for lightning conditions.${NC}"
+    ACTIVATE_LIGHTNING_ANIMATION="$(prompt_bool "Enable lightning animation?" "y")"
+
+    echo -e "${BLUE}FADE_INSTEAD_OF_BLINK: Use fade effect instead of hard blink.${NC}"
+    FADE_INSTEAD_OF_BLINK="$(prompt_bool "Use fade instead of blink?" "y")"
+
+    echo -e "${BLUE}ALWAYS_BLINK_FOR_GUSTS: Animate on gusts even below threshold.${NC}"
+    ALWAYS_BLINK_FOR_GUSTS="$(prompt_bool "Always blink for gusts?" "n")"
+
+    echo -e "${BLUE}ACTIVATE_DAYTIME_DIMMING: Dim LEDs during day/night schedule.${NC}"
+    ACTIVATE_DAYTIME_DIMMING="$(prompt_bool "Enable daytime dimming?" "y")"
+
+    if [[ "$ACTIVATE_DAYTIME_DIMMING" == true ]]; then
+        echo -e "${BLUE}USE_SUNRISE_SUNSET: Use city sunrise/sunset instead of fixed times.${NC}"
+        USE_SUNRISE_SUNSET="$(prompt_bool "Use sunrise/sunset times?" "y")"
+        if [[ "$USE_SUNRISE_SUNSET" == true ]]; then
+            LOCATION="$(prompt_text "Enter your city for sunrise/sunset calculations (default: Detroit): " "Detroit")"
+        else
+            LOCATION="Detroit"
+        fi
+    else
+        USE_SUNRISE_SUNSET=false
+        LOCATION="Detroit"
+    fi
+
+    echo -e "${BLUE}ACTIVATE_EXTERNAL_METAR_DISPLAY: Enable OLED display support.${NC}"
+    ACTIVATE_EXTERNAL_METAR_DISPLAY="$(prompt_bool "Enable external METAR display?" "n")"
+
+    echo -e "${BLUE}SHOW_LEGEND: Show legend colors on extra LEDs.${NC}"
+    SHOW_LEGEND="$(prompt_bool "Show color legend?" "n")"
+
+    echo -e "${BLUE}REPLACE_CAT_WITH_CLOSEST: Fill missing categories with nearest station.${NC}"
+    REPLACE_CAT_WITH_CLOSEST="$(prompt_bool "Replace missing categories with closest station?" "y")"
+
+    LOCATION_ESCAPED="${LOCATION//\"/\\\"}"
+
+    cat > config.json <<CONFIG_EOF
 {
   "LED_COUNT": $LED_COUNT,
   "LED_PIN": "board.D18",
@@ -215,182 +248,106 @@ cat > config.json << EOF
   "DIM_TIME_START": "19:00",
   "LED_BRIGHTNESS_DIM": 0.1,
   "USE_SUNRISE_SUNSET": $USE_SUNRISE_SUNSET,
-  "LOCATION": "$LOCATION",
+  "LOCATION": "$LOCATION_ESCAPED",
   "ACTIVATE_EXTERNAL_METAR_DISPLAY": $ACTIVATE_EXTERNAL_METAR_DISPLAY,
   "DISPLAY_ROTATION_SPEED": 5.0,
   "SHOW_LEGEND": $SHOW_LEGEND,
   "OFFSET_LEGEND_BY": 0,
   "REPLACE_CAT_WITH_CLOSEST": $REPLACE_CAT_WITH_CLOSEST
 }
-EOF
+CONFIG_EOF
 
-echo "Configuration saved to config.json"
-
-# Create airports file if it doesn't exist
-# This file lists the airport codes to monitor
-if [ -f airports ]; then
-    echo "airports file already exists. Skipping creation."
+    echo "Configuration saved to config.json"
 else
-    echo "Creating sample airports file..."
-    echo "KDTW" > airports
-    echo "NULL" >> airports
-    check_command "Creating airports file"
-    echo "Please edit the airports file to add your desired airports."
+    echo -e "${GREEN}Keeping existing config.json${NC}"
 fi
 
-# Create display airports file if display is enabled
-# This specifies which airports to show on the external display
-if [ "$ACTIVATE_EXTERNAL_METAR_DISPLAY" = true ]; then
-    if [ -f displayairports ]; then
-        echo "displayairports file already exists. Skipping creation."
+# Install optional libraries based on current config
+activate_flag() {
+    local key="$1"
+    python3 - <<PYCODE
+import json
+with open("config.json") as f:
+    cfg = json.load(f)
+print(str(bool(cfg.get("$key", False))).lower())
+PYCODE
+}
+
+USE_SUNRISE_SUNSET="$(activate_flag "USE_SUNRISE_SUNSET")"
+ACTIVATE_EXTERNAL_METAR_DISPLAY="$(activate_flag "ACTIVATE_EXTERNAL_METAR_DISPLAY")"
+
+if [[ "$USE_SUNRISE_SUNSET" == true ]]; then
+    echo -e "${GREEN}Installing astral for sunrise/sunset support...${NC}"
+    pip install --upgrade astral
+fi
+
+if [[ "$ACTIVATE_EXTERNAL_METAR_DISPLAY" == true ]]; then
+    echo -e "${GREEN}Installing display dependencies...${NC}"
+    run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y python3-pil
+    pip install --upgrade adafruit-circuitpython-ssd1306 pillow
+
+    if command -v raspi-config >/dev/null 2>&1; then
+        run_as_root raspi-config nonint do_i2c 0
+        echo "I2C enabled. Reboot if this is your first time enabling it."
     else
-        echo "Creating sample displayairports file..."
-        cp airports displayairports
-        check_command "Creating displayairports file"
+        echo -e "${YELLOW}raspi-config not found; enable I2C manually if needed.${NC}"
     fi
 fi
 
-# Install optional libraries based on configuration
-if [ "$USE_SUNRISE_SUNSET" = true ]; then
-    echo -e "${GREEN}Installing astral for sunrise/sunset dimming...${NC}"
-    . metarmap_env/bin/activate
-    pip install astral
-    check_command "Installing astral"
-    deactivate
+deactivate
+
+# Ensure script permissions
+chmod +x setup.sh update.sh refresh.sh lightsoff.sh
+
+# Create airports file if it doesn't exist
+if [[ ! -f airports ]]; then
+    echo "Creating sample airports file..."
+    {
+        echo "KDTW"
+        echo "NULL"
+    } > airports
+    echo "Please edit the airports file to add your desired airports."
+else
+    echo "airports file already exists."
 fi
 
-if [ "$ACTIVATE_EXTERNAL_METAR_DISPLAY" = true ]; then
-    echo -e "${GREEN}Installing libraries for external display...${NC}"
-    # Install system package for image handling
-    sudo apt-get install -y python3-pil
-    check_command "Installing python3-pil"
-    # Activate venv for pip installs
-    . metarmap_env/bin/activate
-    # Install Python libraries for OLED display control
-    pip install adafruit-circuitpython-ssd1306 pillow
-    check_command "Installing display libraries"
-    deactivate
-    # Enable I2C interface for the display hardware
-    sudo raspi-config nonint do_i2c 0
-    check_command "Enabling I2C"
-    echo "I2C enabled. Please reboot after setup if needed."
+# Create display airports file if display is enabled and file doesn't exist
+if [[ "$ACTIVATE_EXTERNAL_METAR_DISPLAY" == true && ! -f displayairports ]]; then
+    echo "Creating sample displayairports file..."
+    cp airports displayairports
 fi
 
 # Set up cron jobs for automated execution
-# This schedules the map to run during the day and turn off at night
-echo -e "${GREEN}Setting up crontab...${NC}"
-if crontab -l > /dev/null 2>&1; then
-    crontab -l > current_crontab
+# Replace existing METARMap-managed block to keep schedule idempotent
+echo -e "${GREEN}Configuring crontab...${NC}"
+CURRENT_CRON="$(mktemp)"
+NEW_CRON="$(mktemp)"
+
+if run_as_root crontab -l > "$CURRENT_CRON" 2>/dev/null; then
+    :
 else
-    touch current_crontab
+    : > "$CURRENT_CRON"
 fi
 
-# Check if METARMap cron jobs are already configured
-# Avoid adding duplicate entries
-if grep -q "# METARMap Crontab Configuration" current_crontab; then
-    echo "Crontab already configured for METARMap. Skipping crontab setup."
-    rm current_crontab
-else
-    # Create new crontab with METARMap entries
-    cat current_crontab > new_crontab
-    echo "" >> new_crontab
-    echo "# METARMap Crontab Configuration" >> new_crontab
-    echo "# This crontab runs the METARMap every 5 minutes from 7 AM to 9 PM," >> new_crontab
-    echo "# and turns off the lights at 10 PM." >> new_crontab
-    echo "# Project directory: $PROJECT_DIR" >> new_crontab
-    echo "# For custom schedules, visit https://crontab.guru/" >> new_crontab
-    echo "" >> new_crontab
-    echo "# Run METARMap every 5 minutes from 7:00 AM to 9:00 PM" >> new_crontab
-    echo "*/5 7-21 * * * $PROJECT_DIR/refresh.sh" >> new_crontab
-    echo "" >> new_crontab
-    echo "# Turn off lights at 10:00 PM" >> new_crontab
-    echo "5 22 * * * $PROJECT_DIR/lightsoff.sh" >> new_crontab
+awk '
+BEGIN {skip=0}
+/^# >>> METARMap >>>$/ {skip=1; next}
+/^# <<< METARMap <<<$/{skip=0; next}
+skip==0 {print}
+' "$CURRENT_CRON" > "$NEW_CRON"
 
-    crontab new_crontab
-    check_command "Setting up crontab"
-    rm current_crontab new_crontab
-fi
+cat >> "$NEW_CRON" <<CRON_EOF
+# >>> METARMap >>>
+# Managed by setup.sh in $PROJECT_DIR
+# For custom schedules, visit https://crontab.guru/
+*/5 7-21 * * * /bin/bash '$PROJECT_DIR/refresh.sh'
+5 22 * * * /bin/bash '$PROJECT_DIR/lightsoff.sh'
+# <<< METARMap <<<
+CRON_EOF
 
-# Setup is complete - provide user with next steps
+run_as_root crontab "$NEW_CRON"
+rm -f "$CURRENT_CRON" "$NEW_CRON"
+
 echo -e "${BOLD}Setup complete!${NC}"
-echo "To activate the virtual environment in future sessions, run: source $PROJECT_DIR/metarmap_env/bin/activate"
-echo "Please edit config.json to customize settings."
-echo "Edit airports file to add your airports."
-echo "If using display, edit displayairports if needed."
-echo "To test, run: sudo $PROJECT_DIR/metarmap_env/bin/python3 $PROJECT_DIR/metar.py"
-echo "The system will run automatically via crontab."
-
-# Optional test run
-echo ""
-echo "Would you like to run a quick test of the LED colors and display?"
-echo "The test will light up all LEDs in sequence with colors for VFR (red), MVFR (blue), IFR (green), LIFR (cyan), lightning (white), high winds (yellow), and clear (off)."
-echo "If external display is enabled, it will show a sample METAR entry."
-read -p "Run test? (y/n): " run_test
-if [ "$run_test" = "y" ]; then
-    echo -e "${GREEN}Running LED and display test...${NC}"
-    . metarmap_env/bin/activate
-    python3 - <<'PYCODE'
-import board
-import neopixel
-import time
-import json
-
-try:
-    with open('config.json') as f:
-        config = json.load(f)
-
-    LED_COUNT = config['LED_COUNT']
-    LED_PIN = eval(config['LED_PIN'])
-    LED_BRIGHTNESS = config['LED_BRIGHTNESS']
-    LED_ORDER = eval(config['LED_ORDER'])
-    ACTIVATE_EXTERNAL_METAR_DISPLAY = config['ACTIVATE_EXTERNAL_METAR_DISPLAY']
-
-    pixels = neopixel.NeoPixel(
-        LED_PIN, LED_COUNT,
-        brightness=LED_BRIGHTNESS,
-        pixel_order=LED_ORDER,
-        auto_write=False
-    )
-
-    # Define test colors
-    colors = [
-        (255, 0, 0),    # VFR (red)
-        (0, 0, 255),    # MVFR (blue)
-        (0, 255, 0),    # IFR (green)
-        (0, 125, 125),  # LIFR (cyan)
-        (255, 255, 255),# Lightning (white)
-        (255, 255, 0),  # High winds (yellow)
-        (0, 0, 0)       # Clear (off)
-    ]
-
-    # Cycle through colors for all LEDs
-    for color in colors:
-        print(f"Testing all LEDs with color {color}")
-        pixels.fill(color)
-        pixels.show()
-        time.sleep(1.5)
-
-    # Turn off LEDs after test
-    pixels.fill((0, 0, 0))
-    pixels.show()
-
-    # Test external display if enabled
-    if ACTIVATE_EXTERNAL_METAR_DISPLAY:
-        try:
-            import displaymetar
-            disp = displaymetar.startDisplay()
-            displaymetar.clearScreen(disp)
-            displaymetar.outputMetar(disp, 'TEST', {'flightCategory': 'VFR', 'tempC': 20, 'windSpeed': 10})
-            print('Testing external display with sample METAR')
-            time.sleep(5)
-            displaymetar.clearScreen(disp)
-        except Exception as e:
-            print(f"Display test failed: {e}")
-
-    print("Test complete")
-
-except Exception as e:
-    print(f"Test failed: {e}")
-PYCODE
-    deactivate
-fi
+echo "To test manually, run: sudo $PROJECT_DIR/metarmap_env/bin/python3 $PROJECT_DIR/metar.py"
+echo "To reconfigure prompts, run: sudo bash $PROJECT_DIR/setup.sh --reconfigure"

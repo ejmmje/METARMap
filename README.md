@@ -49,18 +49,28 @@ A Raspberry Pi project to visualize flight conditions on a map using WS2811 LEDs
    cd METARMap
    ```
 
-3. Run the setup script next. The only part of the setup that is not necessarily automatic is the crontab setup. The script looks to see if anything already exists so that it doesn't overwrite anything. So, clear out the sudo crontab if you want or edit it yourself manually afterwords:
+3. Run the setup script next:
    ```
    sudo bash setup.sh
    ```
-   This will install dependencies, set permissions, and configure crontab.
+   This installs dependencies, sets permissions, creates the virtual environment, and writes a managed METARMap block in `sudo` crontab.
+
+   If you want to force the setup questions again later, run:
+   ```
+   sudo bash setup.sh --reconfigure
+   ```
+
+   For unattended runs (for example, during scripted updates), use:
+   ```
+   sudo bash setup.sh --non-interactive
+   ```
 
 4. If using an external display, you may need to reboot after I2C was enabled for the display.
     ```
     sudo reboot
     ```
    
-5. This is it! The map should now run on the next 5 minute mark between 7:00am and 9:59pm based on the example airports listed in the airports file. To edit them, see the Configuration section below.
+5. This is it. The map should now run on the next 5-minute mark between 7:00 AM and 9:55 PM, based on the example airports listed in the `airports` file. To edit them, see the Configuration section below.
 
 ## Configuration
 
@@ -77,7 +87,7 @@ nano airports
 ```
 I recommend typing out your airport codes in a text editor on your computer, then copying and pasting into the terminal window.
 
-To cut out the existing contents inside aiports, first ```nano``` then hold `Ctrl+K` to cut all lines, then paste your new list.
+To cut out the existing contents inside airports, first open it in `nano`, then hold `Ctrl+K` to cut all lines, then paste your new list.
 
 
 Edit the `airports` file to include the ICAO codes of the airports you want to monitor. Each airport on a new line. Use "NULL" for gaps in your LED strip.
@@ -113,33 +123,32 @@ sudo nano config.json
 ```
 
 ## Final Considerations
-Make sure that you disable any cron jobs from the previous version of METARMap if you had it installed before. You can do this by running:
+If you installed an older version, check for duplicate legacy METARMap cron lines:
 ```
 sudo crontab -e
 ```
 
-The only cron jobs that should be there are the ones added by the setup script. If you see any others, delete them.
-They follow this general format:
+The setup script manages a block with this format:
 ```
-# METARMap Crontab Configuration
-# This crontab runs the METARMap every 5 minutes from 7 AM to 9 PM,
-# and turns off the lights at 10 PM.
-# Project directory: /This/is/Different/for/Everyone/METARMap
+# >>> METARMap >>>
+# Managed by setup.sh in /This/is/Different/for/Everyone/METARMap
 # For custom schedules, visit https://crontab.guru/
 
-# Run METARMap every 5 minutes from 7:00 AM to 9:00 PM
-*/5 7-21 * * * /This/is/Different/for/Everyone/refresh.sh
-
-# Turn off lights at 8:00 PM
-5 22 * * * /This/is/Different/for/Everyone/lightsoff.sh
+*/5 7-21 * * * /bin/bash '/This/is/Different/for/Everyone/METARMap/refresh.sh'
+5 22 * * * /bin/bash '/This/is/Different/for/Everyone/METARMap/lightsoff.sh'
+# <<< METARMap <<<
 ```
 
 ## Updates
-To update the code only, run the following commands in the METARMap directory:
+From the METARMap directory, run:
 ```
 sudo bash update.sh
 ```
-This code will save your airports and displayairports files, pull the latest code from GitHub, and restore your airport files. It will initiate a re-run of the setup file as well. 
+The update script will:
+- Back up `airports`, `displayairports`, and `config.json`
+- Pull the latest code from the current git branch
+- Restore those files
+- Re-run setup in non-interactive mode
 
 ## Settings List for Reference or Custom Configuration
 
@@ -153,14 +162,14 @@ Edit `config.json` to customize the behavior of METARMap. Below is a detailed ex
 
 #### Color Definitions
 RGB color values (0-255) for different flight categories:
-- **`COLOR_VFR`**: Color for Visual Flight Rules (good weather). Default: `[255, 0, 0]` (Green)
-- **`COLOR_VFR_FADE`**: Faded color for VFR animations. Default: `[125, 0, 0]` (Green Fade)
+- **`COLOR_VFR`**: Color for Visual Flight Rules (good weather). Default: `[255, 0, 0]` (Red)
+- **`COLOR_VFR_FADE`**: Faded color for VFR animations. Default: `[125, 0, 0]` (Dim Red)
 - **`COLOR_MVFR`**: Color for Marginal VFR (moderate weather). Default: `[0, 0, 255]` (Blue)
 - **`COLOR_MVFR_FADE`**: Faded color for MVFR animations. Default: `[0, 0, 125]` (Blue Fade)
-- **`COLOR_IFR`**: Color for Instrument Flight Rules (poor weather). Default: `[0, 255, 0]` (Red)
-- **`COLOR_IFR_FADE`**: Faded color for IFR animations. Default: `[0, 125, 0]` (Red Fade)
-- **`COLOR_LIFR`**: Color for Low IFR (very poor weather). Default: `[0, 125, 125]` (Magenta)
-- **`COLOR_LIFR_FADE`**: Faded color for LIFR animations. Default: `[0, 75, 75]` (Magenta Fade)
+- **`COLOR_IFR`**: Color for Instrument Flight Rules (poor weather). Default: `[0, 255, 0]` (Green)
+- **`COLOR_IFR_FADE`**: Faded color for IFR animations. Default: `[0, 125, 0]` (Dim Green)
+- **`COLOR_LIFR`**: Color for Low IFR (very poor weather). Default: `[0, 125, 125]` (Cyan)
+- **`COLOR_LIFR_FADE`**: Faded color for LIFR animations. Default: `[0, 75, 75]` (Dim Cyan)
 - **`COLOR_CLEAR`**: Color for no data or off. Default: `[0, 0, 0]` (Clear)
 - **`COLOR_LIGHTNING`**: Color for lightning conditions. Default: `[255, 255, 255]` (White)
 - **`COLOR_HIGH_WINDS`**: Color for high wind conditions. Default: `[255, 255, 0]` (Yellow)
@@ -177,14 +186,14 @@ RGB color values (0-255) for different flight categories:
 
 #### Daytime Dimming Settings
 - **`ACTIVATE_DAYTIME_DIMMING`**: Enable brightness dimming during the day. Set to `true` or `false`. Default: `true`
-- **`BRIGHT_TIME_START`**: Time to start full brightness (HH:MM). Example: `"07:00"`
+- **`BRIGHT_TIME_START`**: Time to start full brightness (HH:MM). Example: `"08:00"`
 - **`DIM_TIME_START`**: Time to start dimming (HH:MM). Example: `"19:00"`
 - **`LED_BRIGHTNESS_DIM`**: Dimmed brightness level (0.0 to 1.0). Example: `0.1`
 - **`USE_SUNRISE_SUNSET`**: Use actual sunrise/sunset times instead of fixed times. Set to `true` or `false`. Default: `true`
 - **`LOCATION`**: City name for sunrise/sunset calculations (if enabled). Example: `"Detroit"`
 
 #### External Display Settings
-- **`ACTIVATE_EXTERNAL_METAR_DISPLAY`**: Enable the OLED display for METAR details. Set to `true` or `false`. Default: `true`
+- **`ACTIVATE_EXTERNAL_METAR_DISPLAY`**: Enable the OLED display for METAR details. Set to `true` or `false`. Default: `false`
 - **`DISPLAY_ROTATION_SPEED`**: Seconds between display updates. Example: `5.0`
 
 #### Legend Display Settings
@@ -205,7 +214,7 @@ The LEDs should light up according to current weather conditions.
 
 ## Running Automatically
 
-The setup script configures crontab to run the map every 5 minutes between 7:00 AM and 9:59 PM, and turn off lights at 10:05 PM.
+The setup script configures crontab to run the map every 5 minutes between 7:00 AM and 9:55 PM, and turn off lights at 10:05 PM.
 
 To view or modify the schedule:
 ```
@@ -214,10 +223,10 @@ sudo crontab -e
 
 ## Flight Categories
 
-- **VFR (Visual Flight Rules)**: Green - Good weather
+- **VFR (Visual Flight Rules)**: Red - Good weather
 - **MVFR (Marginal VFR)**: Blue - Moderate weather
-- **IFR (Instrument Flight Rules)**: Red - Poor weather
-- **LIFR (Low IFR)**: Magenta - Very poor weather
+- **IFR (Instrument Flight Rules)**: Green - Poor weather
+- **LIFR (Low IFR)**: Cyan - Very poor weather
 
 ## Animations
 
