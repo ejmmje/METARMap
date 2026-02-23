@@ -1,5 +1,10 @@
 # Changelist
 
+## 2.0
+- Uses new aviation weather api. Has automatic setup and user-initiated updates if wanted. 
+
+# EJMMJE Updates Above - thought I should update this I suppose
+
 ## 1.6.3 (2024-04-15)
 
 - Fixed an issue where a metar record was received from the aviationweather.gov data, but wasn't actually sending a station id, which caused failure for people that were using such an airport
