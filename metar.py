@@ -144,6 +144,7 @@ try:
     with open("displayairports") as f2:
         displayairports = f2.readlines()
     displayairports = [x.strip() for x in displayairports]
+    print(displayairports)
     print("Using subset airports for LED display")
 except IOError:
     print("Rotating through all airports on LED display")
@@ -324,7 +325,10 @@ for location in output:
             "fltCat": fltCat
         })
     if displayairports is None or icaoId in displayairports:
+        print("This is a display airport")
         station_list.append(icaoId)
+
+print("All Display Airports: " + str(station_list))
 
 print(f"Parsed {station_count} stations.")
 
@@ -429,6 +433,9 @@ while looplimit > 0:
                                      conditionDict.get(station_list[displayAirportCounter], None))
             displayTime += BLINK_SPEED
             print("showing METAR Display for " + station_list[displayAirportCounter])
+            # Print length of time showing current airport
+            if DISPLAY_ROTATION_SPEED - displayTime > 0:
+                print("for another " + str(int(DISPLAY_ROTATION_SPEED - displayTime)) + " seconds")
         else:
             displayTime = 0.0
             displayAirportCounter = displayAirportCounter + 1 if displayAirportCounter < numAirports - 1 else 0
