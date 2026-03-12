@@ -1,24 +1,36 @@
 #!/usr/bin/env python3
-import json
-import urllib.request
-import xml.etree.ElementTree as ET
-import board
-import neopixel
-import time
-import datetime
-import math
-import requests
-import re
+# METARMap Main Script
+# This script fetches METAR weather data and controls WS2811 LEDs to display flight conditions.
+# It runs continuously, updating LED colors based on weather categories and animations.
 
-try:
-    import astral
-except ImportError:
-    astral = None
-try:
-    import displaymetar
-except ImportError:
-    displaymetar = None
+# Import standard libraries
+import json  # For loading configuration from JSON file
+import urllib.request  # For URL handling (legacy, now using requests)
+import xml.etree.ElementTree as ET  # For XML parsing (legacy)
+import board  # For Raspberry Pi GPIO pin definitions
+import neopixel  # For controlling WS2811 LED strips
+import time  # For sleep delays and timing
+import datetime  # For date and time operations
+import math  # For mathematical calculations (e.g., haversine distance)
+import requests  # For HTTP requests to fetch METAR data
+import re # For regular expressions
 
+# Import optional libraries with fallbacks
+try:
+    import astral  # For sunrise/sunset calculations
+except ImportError:
+    astral = None  # Set to None if not installed
+try:
+    import displaymetar  # Custom module for external OLED display
+except ImportError:
+    displaymetar = None  # Set to None if not installed
+
+# Load configuration from JSON file
+# This allows users to customize settings without editing code
+with open('config.json') as f:
+    config = json.load(f)
+
+# Script version information
 # metar.py script iteration 1.7.0 (added fltCat fallback by nearest airport)
 
 # ---------------------------------------------------------------------------
@@ -26,47 +38,54 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 # NeoPixel LED Configuration
-LED_COUNT        = 50
-LED_PIN          = board.D18
-LED_BRIGHTNESS   = 0.5
-LED_ORDER        = neopixel.GRB
+# Settings for the LED strip hardware
+LED_COUNT        = config['LED_COUNT']  # Number of LEDs in the strip
+LED_PIN          = eval(config['LED_PIN'])  # GPIO pin connected to the LED strip (e.g., board.D18)
+LED_BRIGHTNESS   = config['LED_BRIGHTNESS']  # Brightness level (0.0 to 1.0)
+LED_ORDER        = eval(config['LED_ORDER'])  # Color order (e.g., neopixel.GRB)
 
-COLOR_VFR        = (255,0,0)
-COLOR_VFR_FADE   = (125,0,0)
-COLOR_MVFR       = (0,0,255)
-COLOR_MVFR_FADE  = (0,0,125)
-COLOR_IFR        = (0,255,0)
-COLOR_IFR_FADE   = (0,125,0)
-COLOR_LIFR       = (0,125,125)
-COLOR_LIFR_FADE  = (0,75,75)
-COLOR_CLEAR      = (0,0,0)
-COLOR_LIGHTNING  = (255,255,255)
-COLOR_HIGH_WINDS = (255,255,0)
+# Color definitions for different flight categories
+# RGB tuples for LED colors
+COLOR_VFR        = tuple(config['COLOR_VFR'])  # Visual Flight Rules - Green
+COLOR_VFR_FADE   = tuple(config['COLOR_VFR_FADE'])  # Faded VFR for animations
+COLOR_MVFR       = tuple(config['COLOR_MVFR'])  # Marginal VFR - Blue
+COLOR_MVFR_FADE  = tuple(config['COLOR_MVFR_FADE'])  # Faded MVFR
+COLOR_IFR        = tuple(config['COLOR_IFR'])  # Instrument Flight Rules - Red
+COLOR_IFR_FADE   = tuple(config['COLOR_IFR_FADE'])  # Faded IFR
+COLOR_LIFR       = tuple(config['COLOR_LIFR'])  # Low IFR - Magenta
+COLOR_LIFR_FADE  = tuple(config['COLOR_LIFR_FADE'])  # Faded LIFR
+COLOR_CLEAR      = tuple(config['COLOR_CLEAR'])  # Off/black
+COLOR_LIGHTNING  = tuple(config['COLOR_LIGHTNING'])  # White for lightning
+COLOR_HIGH_WINDS = tuple(config['COLOR_HIGH_WINDS'])  # Yellow for high winds
 
-ACTIVATE_WINDCONDITION_ANIMATION = True
-ACTIVATE_LIGHTNING_ANIMATION     = True
-FADE_INSTEAD_OF_BLINK            = True
-WIND_BLINK_THRESHOLD             = 15
-HIGH_WINDS_THRESHOLD             = 25
-ALWAYS_BLINK_FOR_GUSTS           = False
-BLINK_SPEED                      = 2.0
-BLINK_TOTALTIME_SECONDS          = 300
+# Animation settings
+ACTIVATE_WINDCONDITION_ANIMATION = config['ACTIVATE_WINDCONDITION_ANIMATION']  # Enable wind animations
+ACTIVATE_LIGHTNING_ANIMATION     = config['ACTIVATE_LIGHTNING_ANIMATION']  # Enable lightning animations
+FADE_INSTEAD_OF_BLINK            = config['FADE_INSTEAD_OF_BLINK']  # Use fade instead of blink for animations
+WIND_BLINK_THRESHOLD             = config['WIND_BLINK_THRESHOLD']  # Wind speed threshold for blinking
+HIGH_WINDS_THRESHOLD             = config['HIGH_WINDS_THRESHOLD']  # Threshold for high winds
+ALWAYS_BLINK_FOR_GUSTS           = config['ALWAYS_BLINK_FOR_GUSTS']  # Blink for gusts regardless of speed
+BLINK_SPEED                      = config['BLINK_SPEED']  # Speed of the blink animation
+BLINK_TOTALTIME_SECONDS          = config['BLINK_TOTALTIME_SECONDS']  # Total time for blink cycle
 
-ACTIVATE_DAYTIME_DIMMING         = True
-BRIGHT_TIME_START                = datetime.time(7,0)
-DIM_TIME_START                   = datetime.time(19,0)
-LED_BRIGHTNESS_DIM               = 0.1
-USE_SUNRISE_SUNSET               = True
-LOCATION                         = "Detroit"
+# Daytime dimming settings
+ACTIVATE_DAYTIME_DIMMING         = config['ACTIVATE_DAYTIME_DIMMING']  # Enable dimming during daytime
+BRIGHT_TIME_START                = datetime.datetime.strptime(config['BRIGHT_TIME_START'], '%H:%M').time()  # Start time for bright LEDs
+DIM_TIME_START                   = datetime.datetime.strptime(config['DIM_TIME_START'], '%H:%M').time()  # Start time for dim LEDs
+LED_BRIGHTNESS_DIM               = config['LED_BRIGHTNESS_DIM']  # Dimmed brightness level
+USE_SUNRISE_SUNSET               = config['USE_SUNRISE_SUNSET']  # Use sunrise/sunset times for dimming
+LOCATION                         = config['LOCATION']  # Location for sunrise/sunset calculations
 
-ACTIVATE_EXTERNAL_METAR_DISPLAY  = True
-DISPLAY_ROTATION_SPEED           = 5.0
+# External METAR display settings
+ACTIVATE_EXTERNAL_METAR_DISPLAY  = config['ACTIVATE_EXTERNAL_METAR_DISPLAY']  # Enable external METAR display
+DISPLAY_ROTATION_SPEED           = config['DISPLAY_ROTATION_SPEED']  # Speed of display rotation
 
-SHOW_LEGEND                      = False
-OFFSET_LEGEND_BY                 = 0
+# Legend display settings
+SHOW_LEGEND                      = config['SHOW_LEGEND']  # Enable legend display
+OFFSET_LEGEND_BY                 = config['OFFSET_LEGEND_BY']  # Offset for legend position
 
 # Replace missing fltCat with nearest valid station's fltCat
-REPLACE_CAT_WITH_CLOSEST         = True
+REPLACE_CAT_WITH_CLOSEST         = config['REPLACE_CAT_WITH_CLOSEST']  # Enable replacement of missing fltCat
 
 # ---------------------------------------------------------------------------
 # ------------END OF CONFIGURATION-------------------------------------------
@@ -75,31 +94,38 @@ REPLACE_CAT_WITH_CLOSEST         = True
 print("Running metar.py at " + datetime.datetime.now().strftime('%d/%m/%Y %H:%M'))
 
 # Figure out sunrise/sunset times if astral is being used
+# Figure out sunrise/sunset times if astral is being used
 if astral is not None and USE_SUNRISE_SUNSET:
+    import astral.geocoder
+    import astral.sun
+    from zoneinfo import ZoneInfo
+    import datetime
+
     try:
-        ast = astral.Astral()
+        city = astral.geocoder.lookup(LOCATION, astral.geocoder.database())
+    except KeyError:
+        print("Error: Location not recognized, please check list of supported cities and reconfigure")
+        BRIGHT_TIME_START = datetime.time(8, 0)
+        DIM_TIME_START = datetime.time(19, 0)
+    else:
         try:
-            city = ast[LOCATION]
-        except KeyError:
-            print("Error: Location not recognized, please check list of supported cities and reconfigure")
-        else:
-            print(city)
-            sun = city.sun(date = datetime.datetime.now().date(), local = True)
+            # Convert the timezone string to a proper tzinfo object
+            tz = ZoneInfo(city.timezone)
+            today = datetime.date.today()
+
+            # Calculate sunrise/sunset with tzinfo
+            sun = astral.sun.sun(city.observer, date=today, tzinfo=tz)
             BRIGHT_TIME_START = sun['sunrise'].time()
             DIM_TIME_START = sun['sunset'].time()
-    except AttributeError:
-        import astral.geocoder
-        import astral.sun
-        try:
-            city = astral.geocoder.lookup(LOCATION, astral.geocoder.database())
-        except KeyError:
-            print("Error: Location not recognized, please check list of supported cities and reconfigure")
-        else:
-            print(city)
-            sun = astral.sun.sun(city.observer, date = datetime.datetime.now().date(), tzinfo=city.timezone)
-            BRIGHT_TIME_START = sun['sunrise'].time()
-            DIM_TIME_START = sun['sunset'].time()
-    print("Sunrise:" + BRIGHT_TIME_START.strftime('%H:%M') + " Sunset:" + DIM_TIME_START.strftime('%H:%M'))
+
+        except Exception as e:
+            print(f"Error calculating sunrise/sunset times: {e}. Falling back to default times.")
+            BRIGHT_TIME_START = datetime.time(8, 0)
+            DIM_TIME_START = datetime.time(19, 0)
+
+    print("Sunrise: " + BRIGHT_TIME_START.strftime('%H:%M') +
+          " Sunset: " + DIM_TIME_START.strftime('%H:%M'))
+
 
 # Initialize the LED strip
 bright = BRIGHT_TIME_START < datetime.datetime.now().time() < DIM_TIME_START
@@ -110,12 +136,12 @@ print("External Display:" + str(ACTIVATE_EXTERNAL_METAR_DISPLAY))
 pixels = neopixel.NeoPixel(LED_PIN, LED_COUNT, brightness = LED_BRIGHTNESS_DIM if (ACTIVATE_DAYTIME_DIMMING and bright == False) else LED_BRIGHTNESS, pixel_order = LED_ORDER, auto_write = False)
 
 # Read airports
-with open("/Path/To/airports") as f:
+with open("airports") as f:
     airports = f.readlines()
 airports = [x.strip() for x in airports]
 
 try:
-    with open("/Path/To/displayairports") as f2:
+    with open("displayairports") as f2:
         displayairports = f2.readlines()
     displayairports = [x.strip() for x in displayairports]
     print(displayairports)
@@ -163,11 +189,48 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+def find_nearest_station(lat, lon, candidates):
+    nearest = None
+    nearest_dist = float("inf")
+    for ref in candidates:
+        dist = haversine(lat, lon, ref["lat"], ref["lon"])
+        if dist < nearest_dist:
+            nearest = ref
+            nearest_dist = dist
+    return nearest, nearest_dist
+
+def fetch_station_coordinates(station_ids):
+    station_ids = [s for s in station_ids if s and s != "NULL"]
+    if not station_ids:
+        return {}
+
+    station_url = f'https://aviationweather.gov/api/data/stationinfo?ids={",".join(station_ids)}&format=json'
+    try:
+        station_req = requests.get(station_url, timeout=10)
+        station_req.raise_for_status()
+        station_output = station_req.json()
+    except (requests.RequestException, ValueError) as e:
+        print(f"Could not fetch station metadata for missing METARs: {e}")
+        return {}
+
+    coords = {}
+    for station in station_output:
+        icao_id = safe_str(station.get("icaoId"))
+        try:
+            lat = float(str(station.get("lat")).strip())
+            lon = float(str(station.get("lon")).strip())
+        except (TypeError, ValueError):
+            continue
+        if icao_id:
+            coords[icao_id] = {"lat": lat, "lon": lon}
+    return coords
+
 # --- Fetch METAR data ---
-url = f'https://aviationweather.gov/api/data/metar?ids={",".join([item for item in airports if item != "NULL"])}&format=json&taf=false'
+url = f'https://aviationweather.gov/api/data/metar?ids={",".join([item for item in airports if item != "NULL"])}&format=json&taf=false&hours=2'
 print(url)
 
 req = requests.get(url)
+#print(req.text)
 output = json.loads(req.text)
 
 # --- Parse response ---
@@ -180,7 +243,6 @@ station_meta = []
 pattern = re.compile(
     r"\b(VCTS|[-+]?TS(?:RA|SN|PL|GR|SG|GS|SH|UP|SP|SNRA)?|LTG(?:IC|CC|CG|CA)?|(?:FRQ|OCNL|CONS|DSNT)\s+LTG)\b"
 )
-
 
 for location in output:
     icaoId = safe_str(location.get("icaoId"))
@@ -232,8 +294,8 @@ for location in output:
 
     # --- Lightning detection ---
     lightning = (
-        not re.search(r"\bTSNO\b", rawOb.upper()) and
-        bool(re.search(pattern, rawOb.upper()))
+            not re.search(r"\bTSNO\b", rawOb.upper()) and
+            bool(re.search(pattern, rawOb.upper()))
     )
 
     # --- Populate results ---
@@ -275,16 +337,29 @@ valid_stations = [s for s in station_meta if s["fltCat"] and s["lat"] and s["lon
 
 for s in station_meta:
     if not s["fltCat"] and s["lat"] and s["lon"] and valid_stations and REPLACE_CAT_WITH_CLOSEST:
-        nearest = None
-        nearest_dist = float("inf")
-        for ref in valid_stations:
-            dist = haversine(s["lat"], s["lon"], ref["lat"], ref["lon"])
-            if dist < nearest_dist:
-                nearest = ref
-                nearest_dist = dist
+        nearest, nearest_dist = find_nearest_station(s["lat"], s["lon"], valid_stations)
         if nearest:
             conditionDict[s["icaoId"]]["flightCategory"] = nearest["fltCat"]
             print(f"{s['icaoId']} missing fltCat — using nearest {nearest['icaoId']} ({nearest_dist:.1f} km, {nearest['fltCat']})")
+
+# --- fill airports missing from METAR response by nearest valid station ---
+missing_airports = [code for code in airports if code != "NULL" and code not in conditionDict]
+if missing_airports and valid_stations and REPLACE_CAT_WITH_CLOSEST:
+    missing_coords = fetch_station_coordinates(missing_airports)
+    for missing_code in missing_airports:
+        coords = missing_coords.get(missing_code)
+        if not coords:
+            print(f"{missing_code} missing METAR — no station coordinates found for nearest fallback")
+            continue
+
+        nearest, nearest_dist = find_nearest_station(coords["lat"], coords["lon"], valid_stations)
+        if nearest:
+            nearest_conditions = conditionDict.get(nearest["icaoId"], {})
+            if nearest_conditions:
+                conditionDict[missing_code] = dict(nearest_conditions)
+                if missing_code not in station_list:
+                    station_list.append(missing_code)
+                print(f"{missing_code} missing METAR — using nearest {nearest['icaoId']} ({nearest_dist:.1f} km, {nearest['fltCat']})")
 
 
 # Start up external display output
@@ -373,5 +448,3 @@ while looplimit > 0:
 
 print()
 print("Done")
-
-
